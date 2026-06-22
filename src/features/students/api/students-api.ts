@@ -39,3 +39,39 @@ export async function getCohorts(): Promise<Cohort[]> {
 export async function getCohortById(id: string): Promise<Cohort | undefined> {
   return db.cohorts.get(id);
 }
+
+export async function bulkImportStudents(
+  students: Student[],
+  options?: { skipDuplicates: boolean }
+): Promise<{ imported: number; skipped: number }> {
+  if (students.length === 0) return { imported: 0, skipped: 0 };
+
+  const skip = options?.skipDuplicates ?? true;
+  let imported = 0;
+  let skipped = 0;
+
+  const existing = await db.students.toArray();
+  const emailSet = new Set(existing.map((s) => s.email?.toLowerCase()).filter(Boolean));
+  const externalIdSet = new Set(existing.map((s) => s.externalId.toLowerCase()));
+
+  for (const student of students) {
+    const isDuplicate = skip && (
+      (student.email && emailSet.has(student.email.toLowerCase())) ||
+      (student.externalId && externalIdSet.has(student.externalId.toLowerCase()))
+    );
+
+    if (isDuplicate) {
+      skipped++;
+      continue;
+    }
+
+    await db.students.put(student);
+
+    if (student.email) emailSet.add(student.email.toLowerCase());
+    if (student.externalId) externalIdSet.add(student.externalId.toLowerCase());
+
+    imported++;
+  }
+
+  return { imported, skipped };
+}

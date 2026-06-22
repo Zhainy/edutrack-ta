@@ -202,8 +202,20 @@ export function validateAndParseRows<T>(
 
 // ── Inferred raw types ───────────────────────────────────────────────────
 
+// ── Student Import (from CSV/XLSX with Spanish headers) ──────────────────
+
+export const RawStudentImportSchema = z.object({
+  rut: z.string().optional(),
+  nombre: z.string().min(1, 'Nombre requerido'),
+  email: z.string().email('Email inválido').or(z.literal('')),
+  telefono: z.string().optional(),
+});
+
+// ── Inferred raw types ───────────────────────────────────────────────────
+
 export type RawStudent = z.infer<typeof RawStudentSchema>;
 export type RawAttendance = z.infer<typeof RawAttendanceSchema>;
 export type RawProgress = z.infer<typeof RawProgressSchema>;
 export type RawDedication = z.infer<typeof RawDedicationSchema>;
 export type RawSyllabus = z.infer<typeof RawSyllabusSchema>;
+export type RawStudentImport = z.infer<typeof RawStudentImportSchema>;

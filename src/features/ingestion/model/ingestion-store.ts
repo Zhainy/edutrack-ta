@@ -1,13 +1,14 @@
 import { create } from 'zustand';
-import { detectFileType, parseCsv, parseXlsx } from '../lib';
+import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX } from '../lib';
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
   RawAttendanceSchema,
   RawProgressSchema,
   RawDedicationSchema,
   RawSyllabusSchema,
+  RawStudentImportSchema,
 } from '@/shared/lib/validators';
-import { normalizeAttendance, normalizeProgress, normalizeDedication, normalizeSyllabus } from '../lib/normalizer';
+import { normalizeAttendance, normalizeProgress, normalizeDedication, normalizeSyllabus, normalizeStudentFromImport } from '../lib/normalizer';
 import {
   bulkUpsertAttendance,
   bulkUpsertProgress,
@@ -17,6 +18,7 @@ import {
   getUploadLogs,
   clearUploadLogs,
 } from '../api/ingestion-api';
+import { bulkImportStudents } from '@/features/students';
 import type { FileType, ValidationError, ParseResult } from '../types';
 import type { UploadLog } from '@/entities/upload-log';
 
@@ -124,10 +126,19 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         console.log(`[ingestion-store] Processing ${fileType} (${format}): ${file.name}`);
 
         // 2. Parse
-        const mappings = DEFAULT_COLUMN_MAPPINGS[fileType as keyof typeof DEFAULT_COLUMN_MAPPINGS] ?? [];
-        const parseResult = format === 'csv'
-          ? await parseCsv({ file, mappings })
-          : await parseXlsx({ file, mappings });
+        let parseResult: ParseResult<Record<string, string>>;
+
+        if (fileType === 'students') {
+          const result = format === 'csv'
+            ? await parseStudentCSV(file)
+            : await parseStudentXLSX(file);
+          parseResult = result as unknown as ParseResult<Record<string, string>>;
+        } else {
+          const mappings = DEFAULT_COLUMN_MAPPINGS[fileType as keyof typeof DEFAULT_COLUMN_MAPPINGS] ?? [];
+          parseResult = format === 'csv'
+            ? await parseCsv({ file, mappings })
+            : await parseXlsx({ file, mappings });
+        }
 
         if (parseResult.data.length === 0 && parseResult.errors.length > 0) {
           fileResults.push({
@@ -154,6 +165,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           progress: RawProgressSchema,
           dedication: RawDedicationSchema,
           syllabus: RawSyllabusSchema,
+          students: RawStudentImportSchema,
         };
 
         const normalizerMap: Partial<Record<FileType, (input: Record<string, unknown>) => { data: unknown[]; errors: ValidationError[] }>> = {
@@ -161,6 +173,12 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           progress: (input) => normalizeProgress(input as never),
           dedication: (input) => normalizeDedication(input as never),
           syllabus: (input) => normalizeSyllabus(input as never),
+          students: (input) => {
+            const raw = input.raw as Record<string, string>;
+            const cohortId = input.cohortId as string;
+            const result = normalizeStudentFromImport(raw as never, cohortId);
+            return { data: result.data as unknown[], errors: result.errors };
+          },
         };
 
         const bulkUpsertMap: Partial<Record<FileType, (data: unknown[]) => Promise<number>>> = {
@@ -168,6 +186,10 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           progress: bulkUpsertProgress as (data: unknown[]) => Promise<number>,
           dedication: bulkUpsertDedication as (data: unknown[]) => Promise<number>,
           syllabus: bulkUpsertSyllabus as (data: unknown[]) => Promise<number>,
+          students: (async (data: unknown[]) => {
+            const result = await bulkImportStudents(data as never, { skipDuplicates: true });
+            return result.imported;
+          }) as (data: unknown[]) => Promise<number>,
         };
 
         const schema = schemaMap[fileType];
@@ -215,7 +237,8 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         const normalizeErrors: ValidationError[] = [];
 
         for (let r = 0; r < validRawRows.length; r++) {
-          const input = fileType === 'syllabus'
+          const needsCohortId = fileType === 'syllabus' || fileType === 'students';
+          const input = needsCohortId
             ? { raw: validRawRows[r], index: r + 2, cohortId }
             : { raw: validRawRows[r], index: r + 2 };
           const normResult = normalizer(input);

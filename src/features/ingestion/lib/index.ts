@@ -4,6 +4,9 @@ export type { CsvParseOptions } from './csv-parser';
 export { parseXlsx, getSheetNames } from './xlsx-parser';
 export type { XlsxParseOptions } from './xlsx-parser';
 
+export { parseStudentCSV, parseStudentXLSX } from './student-parser';
+export type { RawStudentImport } from './student-parser';
+
 export { detectFileType } from './detect-file-type';
 
 export {
@@ -19,6 +22,9 @@ export {
   normalizeProgress,
   normalizeDedication,
   normalizeSyllabus,
+  normalizeRUT,
+  normalizeName,
+  normalizeStudentFromImport,
 } from './normalizer';
 export type {
   NormalizeStudentInput,

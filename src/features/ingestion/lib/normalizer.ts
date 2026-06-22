@@ -11,6 +11,7 @@ import type {
   RawProgress,
   RawDedication,
   RawSyllabus,
+  RawStudentImport,
 } from '@/shared/lib/validators';
 
 // ── Date normalizer ───────────────────────────────────────────────────────
@@ -448,4 +449,81 @@ export function normalizeSyllabus(
   };
 
   return { data: [result], errors };
+}
+
+// ── RUT normalizer ────────────────────────────────────────────────────────
+
+export function normalizeRUT(rut?: string): string {
+  if (!rut) return '';
+  return rut
+    .replace(/\./g, '')
+    .replace(/-/g, '')
+    .replace(/\s/g, '')
+    .toUpperCase();
+}
+
+// ── Name normalizer ───────────────────────────────────────────────────────
+
+export function normalizeName(name: string): string {
+  return name
+    .trim()
+    .replace(/\s+/g, ' ')
+    .split(' ')
+    .map((word) => {
+      if (!word) return '';
+      return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+    })
+    .join(' ')
+    .trim();
+}
+
+// ── Student import normalizer (from CSV/XLSX with Spanish headers) ────────
+
+export function normalizeStudentFromImport(
+  raw: RawStudentImport,
+  cohortId: string
+): { data: Partial<Student>[]; errors: ValidationError[] } {
+  const errors: ValidationError[] = [];
+  const now = new Date().toISOString();
+
+  if (!raw.nombre || !raw.nombre.trim()) {
+    errors.push({
+      row: 0,
+      column: 'nombre',
+      message: 'Nombre completo requerido',
+      value: raw.nombre,
+    });
+  }
+
+  if (!raw.email || !raw.email.trim()) {
+    errors.push({
+      row: 0,
+      column: 'email',
+      message: 'Email requerido',
+      value: raw.email,
+    });
+  }
+
+  const cleanedRut = normalizeRUT(raw.rut);
+  const fullName = normalizeName(raw.nombre ?? '');
+  const email = raw.email ? normalizeEmail(raw.email) : '';
+
+  const student: Partial<Student> = {
+    id: crypto.randomUUID(),
+    cohortId,
+    externalId: cleanedRut || email,
+    fullName,
+    email: email || undefined,
+    status: 'active',
+    enrollmentDate: now.split('T')[0],
+    tags: [],
+    metadata: {
+      ...(raw.rut ? { rut: raw.rut } : {}),
+      ...(raw.telefono ? { telefono: raw.telefono } : {}),
+    },
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  return { data: [student], errors };
 }
