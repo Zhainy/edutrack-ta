@@ -1,6 +1,27 @@
 import { db } from '@/shared/lib/database';
+import { calculateRisk } from '@/features/risk-engine';
 import type { Student } from '@/entities/student';
 import type { Cohort } from '@/entities/cohort';
+import type { RiskOutput } from '@/features/risk-engine';
+
+export interface StudentMetrics {
+  studentId: string;
+  totalHours: number;
+  expectedHours: number;
+  hoursPercentage: number;
+  attendanceRate: number;
+  totalClasses: number;
+  presentClasses: number;
+  absentClasses: number;
+  completedActivities: number;
+  totalActivities: number;
+  activityPercentage: number;
+  riskScore: number;
+  riskLevel: RiskOutput['riskLevel'];
+  riskFactors: string[];
+  lastActivityDate: string | null;
+  daysSinceLastActivity: number;
+}
 
 export async function getAllStudents(cohortId?: string): Promise<Student[]> {
   if (cohortId) {
@@ -48,6 +69,86 @@ export async function deleteStudent(id: string): Promise<void> {
     await db.dedication.where('studentId').equals(id).delete();
     await db.notes.where('studentId').equals(id).delete();
   });
+}
+
+export async function getStudentMetrics(
+  studentId: string
+): Promise<StudentMetrics> {
+  const student = await db.students.get(studentId);
+  if (!student) throw new Error('Student not found');
+
+  const attendance = await db.attendance.where('studentId').equals(studentId).toArray();
+  const dedication = await db.dedication.where('studentId').equals(studentId).toArray();
+  const progress = await db.progress.where('studentId').equals(studentId).toArray();
+  const syllabus = await db.syllabus.where('cohortId').equals(student.cohortId).toArray();
+
+  const totalHours = dedication.reduce((sum, d) => sum + d.hours, 0);
+  const expectedHours = syllabus.reduce((sum, s) => sum + s.expectedHours, 0);
+  const hoursPercentage = expectedHours > 0 ? (totalHours / expectedHours) * 100 : 0;
+
+  const presentClasses = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
+  const absentClasses = attendance.filter(a => a.status === 'absent').length;
+  const totalClasses = attendance.length;
+  const attendanceRate = totalClasses > 0 ? (presentClasses / totalClasses) * 100 : 100;
+
+  const completedActivities = progress.filter(p => p.completed).length;
+  const totalActivities = syllabus.reduce((sum, s) => sum + s.activities.length, 0);
+  const activityPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
+
+  const risk = calculateRisk({
+    student,
+    attendance,
+    progress,
+    dedication,
+    syllabus,
+    referenceDate: new Date(),
+  });
+
+  const dates = dedication.map(d => new Date(d.date).getTime());
+  const lastActivity = dates.length > 0 ? new Date(Math.max(...dates)) : null;
+  const daysSinceLastActivity = lastActivity
+    ? Math.floor((Date.now() - lastActivity.getTime()) / (1000 * 60 * 60 * 24))
+    : 999;
+
+  return {
+    studentId,
+    totalHours: Math.round(totalHours * 10) / 10,
+    expectedHours,
+    hoursPercentage: Math.round(hoursPercentage * 10) / 10,
+    attendanceRate: Math.round(attendanceRate * 10) / 10,
+    totalClasses,
+    presentClasses,
+    absentClasses,
+    completedActivities,
+    totalActivities,
+    activityPercentage: Math.round(activityPercentage * 10) / 10,
+    riskScore: risk.riskScore,
+    riskLevel: risk.riskLevel,
+    riskFactors: risk.factors.map(f => f.description),
+    lastActivityDate: lastActivity?.toISOString().split('T')[0] ?? null,
+    daysSinceLastActivity,
+  };
+}
+
+export async function getAllStudentMetrics(
+  cohortId?: string
+): Promise<(Student & { metrics: StudentMetrics })[]> {
+  let students = await db.students.toArray();
+  if (cohortId) {
+    students = students.filter(s => s.cohortId === cohortId);
+  }
+
+  const results: (Student & { metrics: StudentMetrics })[] = [];
+  for (const student of students) {
+    try {
+      const metrics = await getStudentMetrics(student.id);
+      results.push({ ...student, metrics });
+    } catch {
+      console.warn(`[students-api] Skipping metrics for ${student.fullName}`);
+    }
+  }
+
+  return results;
 }
 
 export async function bulkImportStudents(

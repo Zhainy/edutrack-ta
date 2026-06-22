@@ -17,7 +17,7 @@ import {
   getUploadLogs,
   clearUploadLogs,
 } from '../api/ingestion-api';
-import { bulkImportStudents } from '@/features/students';
+import { bulkImportStudents, matchAllRecords } from '@/features/students';
 import type { FileType, ValidationError, ParseResult } from '../types';
 import type { UploadLog } from '@/entities/upload-log';
 
@@ -398,6 +398,17 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
 
     // Refresh logs
     await get().loadUploadLogs();
+
+    // Auto-match records to students
+    try {
+      const matchResult = await matchAllRecords();
+      if (matchResult.matched > 0) {
+        toast.success(`${matchResult.matched} registros vinculados a estudiantes`, { description: `${matchResult.unmatched} sin match` });
+      }
+      console.log(`[ingestion-store] Matching: ${matchResult.matched} matched, ${matchResult.unmatched} unmatched`);
+    } catch (matchErr) {
+      console.error('[ingestion-store] Error during matching:', matchErr);
+    }
 
     console.log(`[ingestion-store] Done. Status: ${overallStatus}`);
   },
