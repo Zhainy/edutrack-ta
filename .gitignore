@@ -81,9 +81,36 @@ Desktop.ini
 .kiro/cache/
 
 # ============================================
+# DATOS PRIVADOS DE ESTUDIANTES (NUNCA SUBIR)
+# ============================================
+*.xlsx
+*.csv
+!*.example.csv
+!*.example.xlsx
+
+# Archivos SENCE con datos reales
+dedication*.xlsx
+dedication*.csv
+progress*.csv
+progress*.xlsx
+asistencia*.xlsx
+asistencia*.csv
+cronograma*.xlsx
+
+# Directorios privados
+data/private/
+uploads/students/
+uploads/attendance/
+uploads/progress/
+
+# Backups
+exports/
+*.bak
+*.backup
+
+# ============================================
 # OPCIONAL - Archivos de datos locales
 # ============================================
-# Si IndexedDB exporta datos a archivos
 *.sqlite
 *.db
 
@@ -94,3 +121,4 @@ Desktop.ini
 *.key
 secrets.json
 credentials.json
+

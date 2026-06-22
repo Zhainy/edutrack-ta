@@ -4,7 +4,9 @@ export interface ProgressRecord {
   activityName: string;
   moduleNumber?: number;
   completed: boolean;
-  completionDate?: string; // ISO 8601: YYYY-MM-DD
-  score?: number;          // decimal 0-100
+  completionDate?: string;
+  score?: number;
+  studentEmail?: string;
+  status?: string;
   uploadedAt: string;
 }

@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import type { ColumnMapping, ParseResult, ValidationError } from '../types';
+import type { DedicationRecord } from '@/entities/dedication';
 
 export interface XlsxParseOptions {
   file: File;
@@ -134,16 +135,16 @@ export async function getSheetNames(file: File): Promise<string[]> {
 
 // ── SENCE Dedication parser ──────────────────────────────────────────────
 // Format: 7 metadata rows, row 8 = headers, row 9+ = data
-// Columns: Nombre | Apellido | Grupo | Dedicación minutos | Dedicación formato | Conexiones
+// Columns: Nombre | Apellido(s) | Grupo | Dedicación al curso (minutos) | Dedicación al curso | Conexiones por día
 
 export async function parseDedicationXLSX(
   file: File
-): Promise<ParseResult<{ studentName: string; minutes: number; hours: number; date: string }>> {
+): Promise<ParseResult<DedicationRecord>> {
   console.log(`[xlsx-parser] Parsing dedication XLSX: ${file.name}`);
 
   try {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', codepage: 65001 });
+    const workbook = XLSX.read(buffer, { type: 'array' });
     const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
     if (!sheet) {
@@ -156,12 +157,12 @@ export async function parseDedicationXLSX(
       };
     }
 
-    const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
+    const rawData = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
     const errors: ValidationError[] = [];
-    const rows: { studentName: string; minutes: number; hours: number; date: string }[] = [];
+    const records: DedicationRecord[] = [];
     const warnings: string[] = [];
 
-    if (data.length < 9) {
+    if (rawData.length < 9) {
       return {
         success: false,
         data: [],
@@ -171,48 +172,69 @@ export async function parseDedicationXLSX(
       };
     }
 
-    for (let r = 8; r < data.length; r++) {
-      const row = data[r];
-      if (!row || row.length < 4) continue;
+    const dataRows = rawData.slice(8);
+    let validRows = 0;
+    let invalidRows = 0;
+    const today = new Date().toISOString().split('T')[0];
 
-      const nombre = String(row[0] ?? '').trim();
-      const apellido = String(row[1] ?? '').trim();
-      const minutesRaw = String(row[3] ?? '').trim();
+    for (let i = 0; i < dataRows.length; i++) {
+      const row = dataRows[i];
+      const rowIndex = i + 9;
 
-      if (!nombre && !apellido) continue;
+      try {
+        if (!row || row.length === 0 || !row[0]) continue;
 
-      const studentName = `${nombre} ${apellido}`.trim();
-      const minutes = parseFloat(minutesRaw.replace(',', '.'));
-      const hours = isNaN(minutes) ? 0 : Math.round((minutes / 60) * 100) / 100;
+        const nombre = String(row[0] ?? '').trim();
+        const apellidos = String(row[1] ?? '').trim();
+        const grupo = String(row[2] ?? '').trim();
+        const minutosRaw = String(row[3] ?? '').trim();
+        const conexiones = parseFloat(String(row[5] ?? '0').trim()) || 0;
 
-      if (isNaN(minutes) || minutes <= 0) {
-        errors.push({
-          row: r + 1,
-          column: 'Dedicación minutos',
-          message: `Minutos inválidos para "${studentName}": "${minutesRaw}"`,
-          value: minutesRaw,
+        if (!nombre || !apellidos) {
+          errors.push({
+            row: rowIndex,
+            column: 'Nombre/Apellido',
+            message: 'Nombre y apellido son requeridos',
+            value: { nombre, apellidos },
+          });
+          invalidRows++;
+          continue;
+        }
+
+        const minutos = parseInt(minutosRaw, 10) || 0;
+        if (minutos === 0) continue;
+
+        const hours = Math.round((minutos / 60) * 100) / 100;
+        const fullName = `${nombre} ${apellidos}`.trim();
+
+        records.push({
+          id: crypto.randomUUID(),
+          studentId: '',
+          studentName: fullName,
+          date: today,
+          hours,
+          platform: 'SENCE',
+          metadata: { grupo, minutos, conexiones },
+          uploadedAt: new Date().toISOString(),
         });
+        validRows++;
+      } catch (error) {
+        errors.push({
+          row: rowIndex,
+          column: 'General',
+          message: `Error procesando fila: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+          value: row,
+        });
+        invalidRows++;
       }
-
-      rows.push({
-        studentName,
-        minutes: isNaN(minutes) ? 0 : minutes,
-        hours,
-        date: new Date().toISOString().split('T')[0],
-      });
     }
 
-    const errorRows = new Set(errors.map((e) => e.row));
     return {
-      success: errors.length === 0,
-      data: rows,
+      success: invalidRows === 0,
+      data: records,
       errors,
       warnings,
-      stats: {
-        totalRows: rows.length,
-        validRows: rows.length - errorRows.size,
-        invalidRows: errorRows.size,
-      },
+      stats: { totalRows: dataRows.length, validRows, invalidRows },
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al leer XLSX';
