@@ -427,27 +427,9 @@ export function StudentsPage() {
           title="Error al cargar estudiantes"
           description={error}
         />
-      {/* Delete confirmation modal */}
-      <Modal
-        open={deleteTarget !== null}
-        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title="Eliminar estudiante"
-        description={`¿Estás seguro de eliminar a "${deleteTarget?.fullName}"? También se eliminarán todos sus registros de asistencia, progreso, dedicación y notas.`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
-              Cancelar
-            </Button>
-            <Button variant="danger" size="sm" onClick={handleDelete} isLoading={isDeleting}>
-              Eliminar
-            </Button>
-          </>
-        }
-      />
-    </div>
-  );
-}
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
@@ -590,6 +572,30 @@ export function StudentsPage() {
           </div>
         </div>
       )}
+
+      {/* Delete confirmation modal */}
+      <Modal
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar estudiante"
+        description={`¿Estás seguro de eliminar a "${deleteTarget?.fullName}"?`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDelete} isLoading={isDeleting}>
+              Eliminar
+            </Button>
+          </>
+        }
+      >
+        <p className="text-sm text-slate-400">
+          Esta acción no se puede deshacer. Se eliminarán todos los registros asociados
+          (asistencia, progreso, dedicación y notas).
+        </p>
+      </Modal>
     </div>
   );
 }
