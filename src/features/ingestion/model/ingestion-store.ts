@@ -71,7 +71,13 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
     set((state) => {
       const next = { ...state.selectedFiles };
       delete next[type];
-      return { selectedFiles: next };
+      const remainingKeys = Object.keys(next);
+      return {
+        selectedFiles: next,
+        fileResults: state.fileResults.filter((r) => r.fileType !== type),
+        errors: state.errors.filter((e) => e.column !== type),
+        status: remainingKeys.length === 0 ? 'idle' : state.status,
+      };
     });
   },
 

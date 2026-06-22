@@ -19,7 +19,6 @@ const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[]; descripti
   { fileType: 'progress', acceptedExtensions: ['.csv'], description: 'CSV de SENCE (progress.*.csv) con actividades' },
   { fileType: 'dedication', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX de SENCE (dedication.*.xlsx) con minutos' },
   { fileType: 'syllabus', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX del cronograma del curso (CRONOGRAMA*.xlsx)' },
-  { fileType: 'students', acceptedExtensions: ['.csv', '.xlsx', '.xls'], description: 'CSV/XLSX con lista de estudiantes' },
 ];
 
 interface ManualStudent {
@@ -245,15 +244,27 @@ export function IngestionPage() {
           </div>
 
           <div className="space-y-2">
-            {Object.entries(selectedFiles).map(([fileType, file]) => (
-              <FilePreview
-                key={fileType}
-                file={file}
-                fileType={fileType as FileType}
-                status="pending"
-                onRemove={() => removeFile(fileType as FileType)}
-              />
-            ))}
+            {Object.entries(selectedFiles).map(([fileType, file]) => {
+              const result = fileResults.find((r) => r.fileType === fileType);
+              const fileStatus: 'pending' | 'processing' | 'completed' | 'error' =
+                status === 'parsing' || status === 'validating' || status === 'saving'
+                  ? 'processing'
+                  : result?.status === 'success'
+                    ? 'completed'
+                    : result?.status === 'failed'
+                      ? 'error'
+                      : 'pending';
+              return (
+                <FilePreview
+                  key={fileType}
+                  file={file}
+                  fileType={fileType as FileType}
+                  status={fileStatus}
+                  errorMessage={result?.errorMessage}
+                  onRemove={() => removeFile(fileType as FileType)}
+                />
+              );
+            })}
           </div>
 
           {/* Progress indicator */}

@@ -6,6 +6,7 @@ interface FilePreviewProps {
   file: File;
   fileType: FileType;
   status?: 'pending' | 'processing' | 'completed' | 'error';
+  errorMessage?: string;
   onRemove: () => void;
 }
 
@@ -30,7 +31,7 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-export function FilePreview({ file, fileType, status = 'pending', onRemove }: FilePreviewProps) {
+export function FilePreview({ file, fileType, status = 'pending', errorMessage, onRemove }: FilePreviewProps) {
   const config = FILE_TYPE_CONFIG[fileType];
   const statusConfig = STATUS_CONFIG[status];
 
@@ -56,6 +57,9 @@ export function FilePreview({ file, fileType, status = 'pending', onRemove }: Fi
           <span className="text-xs text-slate-600">·</span>
           <span className="text-xs text-slate-500">{config.label}</span>
         </div>
+        {errorMessage && (
+          <p className="mt-1 text-xs text-rose-400 truncate">{errorMessage}</p>
+        )}
       </div>
       <button
         type="button"

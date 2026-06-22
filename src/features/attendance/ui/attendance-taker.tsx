@@ -171,7 +171,7 @@ export function AttendanceTaker() {
               onClick={() => markAllPresent(date, students.map((s) => s.id))}
               leftIcon={<CheckCircle2 size={14} strokeWidth={1.5} />}
             >
-              Marcar todos presentes ({formatDate(date)})
+              ✓ {formatDate(date)}
             </Button>
           ))}
         </div>

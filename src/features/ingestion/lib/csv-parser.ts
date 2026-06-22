@@ -15,7 +15,7 @@ export async function parseCsv({
 }: CsvParseOptions): Promise<ParseResult<Record<string, string>>> {
   console.log(`[csv-parser] Parsing CSV: ${file.name} (${file.size} bytes)`);
 
-  const text = await file.text();
+  const text = await readFileAsTextSafe(file);
 
   return new Promise((resolve) => {
     Papa.parse(text, {
@@ -169,19 +169,39 @@ function extractModuleNumber(activityName: string): number | null {
 async function readFileAsTextSafe(file: File): Promise<string> {
   const buffer = await file.arrayBuffer();
   const bytes = new Uint8Array(buffer);
+
   // Check for UTF-16LE BOM (FF FE)
   if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
-    return new TextDecoder('utf-16le').decode(buffer);
+    const decoded = new TextDecoder('utf-16le').decode(buffer);
+    return decoded.replace(/^\uFEFF/, '');
   }
-  // Fallback: try UTF-16LE with null bytes between ASCII chars
-  const sample = bytes.slice(0, Math.min(200, bytes.length));
+
+  // Check for UTF-16BE BOM (FE FF) — rare but handle it
+  if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
+    const decoded = new TextDecoder('utf-16be').decode(buffer);
+    return decoded.replace(/^\uFEFF/, '');
+  }
+
+  // Check for UTF-8 BOM (EF BB BF)
+  if (bytes[0] === 0xEF && bytes[1] === 0xBB && bytes[2] === 0xBF) {
+    const decoded = new TextDecoder('utf-8').decode(buffer);
+    return decoded.replace(/^\uFEFF/, '');
+  }
+
+  // Fallback: detect UTF-16LE by checking for null bytes between ASCII chars
+  const sampleLen = Math.min(4096, bytes.length);
+  const sample = bytes.slice(0, sampleLen);
   let nullCount = 0;
+  let totalChecked = 0;
   for (let i = 1; i < sample.length; i += 2) {
+    totalChecked++;
     if (sample[i] === 0x00) nullCount++;
   }
-  if (nullCount > sample.length * 0.25) {
-    return new TextDecoder('utf-16le').decode(buffer);
+  if (totalChecked > 0 && nullCount > totalChecked * 0.25) {
+    const decoded = new TextDecoder('utf-16le').decode(buffer);
+    return decoded.replace(/^\uFEFF/, '');
   }
+
   return new TextDecoder('utf-8').decode(buffer);
 }
 

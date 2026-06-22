@@ -20,6 +20,7 @@ import {
   ChevronRight,
   AlertTriangle,
   ExternalLink,
+  Trash2,
 } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
@@ -29,7 +30,10 @@ import { Skeleton } from '@/shared/ui/skeleton';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { useDebounce } from '@/shared/hooks';
 import { db } from '@/shared/lib/database';
+import { Modal } from '@/shared/ui/modal';
+import { toast } from '@/shared/ui/toast';
 import { calculateRisk } from '@/features/risk-engine';
+import { deleteStudent } from '@/features/students';
 import type { Student } from '@/entities/student';
 import type { RiskOutput } from '@/features/risk-engine';
 
@@ -145,6 +149,23 @@ export function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'fullName', desc: false }]);
+  const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const handleDelete = async () => {
+    if (!deleteTarget) return;
+    setIsDeleting(true);
+    try {
+      await deleteStudent(deleteTarget.id);
+      setData((prev) => prev.filter((item) => item.student.id !== deleteTarget.id));
+      toast.success('Estudiante eliminado', `${deleteTarget.fullName} ha sido eliminado.`);
+      setDeleteTarget(null);
+    } catch (err) {
+      toast.error('Error al eliminar', err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -356,13 +377,23 @@ export function StudentsPage() {
         id: 'actions',
         header: '',
         cell: ({ row }) => (
-          <Link
-            to={`/students/${row.original.student.id}`}
-            className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
-            aria-label={`Ver perfil de ${row.original.student.fullName}`}
-          >
-            <ExternalLink size={16} strokeWidth={1.5} />
-          </Link>
+          <div className="flex items-center gap-1">
+            <Link
+              to={`/students/${row.original.student.id}`}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+              aria-label={`Ver perfil de ${row.original.student.fullName}`}
+            >
+              <ExternalLink size={16} strokeWidth={1.5} />
+            </Link>
+            <button
+              type="button"
+              onClick={() => setDeleteTarget(row.original.student)}
+              className="inline-flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-rose-400 hover:bg-rose-500/10 transition-colors"
+              aria-label={`Eliminar ${row.original.student.fullName}`}
+            >
+              <Trash2 size={16} strokeWidth={1.5} />
+            </button>
+          </div>
         ),
         enableSorting: false,
       },
@@ -396,9 +427,27 @@ export function StudentsPage() {
           title="Error al cargar estudiantes"
           description={error}
         />
-      </div>
-    );
-  }
+      {/* Delete confirmation modal */}
+      <Modal
+        open={deleteTarget !== null}
+        onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
+        title="Eliminar estudiante"
+        description={`¿Estás seguro de eliminar a "${deleteTarget?.fullName}"? También se eliminarán todos sus registros de asistencia, progreso, dedicación y notas.`}
+        size="sm"
+        footer={
+          <>
+            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
+              Cancelar
+            </Button>
+            <Button variant="danger" size="sm" onClick={handleDelete} isLoading={isDeleting}>
+              Eliminar
+            </Button>
+          </>
+        }
+      />
+    </div>
+  );
+}
 
   return (
     <div className="p-6 space-y-6">
