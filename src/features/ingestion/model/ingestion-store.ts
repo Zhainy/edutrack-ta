@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
-import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV, parseAttendanceXLSX } from '../lib';
+import { detectFileType, parseCsv, parseXlsx, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV, parseAttendanceXLSX, parseStudentsFromAttendanceFile } from '../lib';
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
   RawAttendanceSchema,
@@ -135,10 +135,14 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         let parseResult: ParseResult<Record<string, string>>;
 
         if (fileType === 'students') {
-          const result = format === 'csv'
-            ? await parseStudentCSV(file)
-            : await parseStudentXLSX(file);
-          parseResult = result as unknown as ParseResult<Record<string, string>>;
+          const result = await parseStudentsFromAttendanceFile(file, cohortId);
+          parseResult = {
+            success: result.success,
+            data: result.data as unknown as Record<string, string>[],
+            errors: result.errors,
+            warnings: result.warnings,
+            stats: result.stats,
+          };
         } else if (fileType === 'dedication' && format === 'xlsx') {
           const result = await parseDedicationXLSX(file);
           parseResult = {
@@ -221,7 +225,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         // 3. SENCE parsers (dedication, progress, syllabus) return typed entities directly
         //    Skip Zod/normalize pipeline and go straight to bulkUpsert.
         //    Other types (attendance, students) go through full validation pipeline.
-        const SENCE_TYPES: FileType[] = ['attendance', 'dedication', 'progress', 'syllabus'];
+        const SENCE_TYPES: FileType[] = ['students', 'attendance', 'dedication', 'progress', 'syllabus'];
 
         set({ status: 'validating' });
         const rawRows = parseResult.data;

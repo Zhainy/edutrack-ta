@@ -57,14 +57,18 @@ export async function parseStudentsFromAttendanceFile(
   file: File,
   cohortId: string
 ): Promise<ParseResult<Student>> {
-  console.log(`[attendance-parser] Parsing students from attendance XLSX: ${file.name}`);
+  console.log(`[attendance-parser] Parsing students from XLSX: ${file.name}`);
 
   try {
     const buffer = await file.arrayBuffer();
     const workbook = XLSX.read(buffer, { type: 'array' });
 
-    const sheet = workbook.Sheets['Lista'];
-    if (!sheet) {
+    console.log(`[parseStudents] Sheets: ${workbook.SheetNames.join(', ')}`);
+
+    const listaSheetName = workbook.SheetNames.find(
+      name => name.toLowerCase() === 'lista'
+    );
+    if (!listaSheetName) {
       return {
         success: false,
         data: [],
@@ -74,16 +78,31 @@ export async function parseStudentsFromAttendanceFile(
       };
     }
 
+    const sheet = workbook.Sheets[listaSheetName];
     const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+
+    console.log(`[parseStudents] Total filas leídas: ${rawRows.length}`);
+    console.log(`[parseStudents] Fila 0 (codigo):`, rawRows[0]);
+    console.log(`[parseStudents] Fila 4 (headers):`, rawRows[4]);
+
+    // Row 0-3: metadata (course code, name, empty, empty)
+    // Row 4: headers (Rut, Nombre, ..., Correo, Teléfono, ...)
+    // Row 5+: student data
+    const dataRows = rawRows.slice(5);
+
     const students: Student[] = [];
     const errors: ValidationError[] = [];
 
-    for (let rowIndex = 4; rowIndex < rawRows.length; rowIndex++) {
-      const row = rawRows[rowIndex];
-      if (!row || row.length < 2) continue;
+    for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
+      const row = dataRows[rowIndex];
+      const actualRowIndex = rowIndex + 6; // 1-based display
+
+      if (!row || row.length === 0) continue;
 
       const rut = String(row[0] ?? '').trim();
       const fullName = String(row[1] ?? '').trim();
+      if (!fullName && !rut) continue; // skip truly empty rows
+
       const contactStatus = String(row[2] ?? '').trim();
       const email = String(row[3] ?? '').trim();
       const phone = String(row[4] ?? '').trim();
@@ -91,7 +110,7 @@ export async function parseStudentsFromAttendanceFile(
 
       if (!fullName || !email) {
         errors.push({
-          row: rowIndex + 1,
+          row: actualRowIndex,
           column: 'Nombre/Email',
           message: 'Nombre y email son requeridos',
           value: { fullName, email },
@@ -114,10 +133,9 @@ export async function parseStudentsFromAttendanceFile(
       }
 
       const cs = contactStatus.toLowerCase();
-      if (cs.includes('no contesta')) tags.push('No contesta');
-      else if (cs.includes('buzon')) tags.push('Buzón lleno');
-      else if (cs.includes('whatsapp')) tags.push('Contacto por WhatsApp');
-      else if (cs === 'bien') tags.push('Contacto exitoso');
+      if (cs === 'no contesta') tags.push('No contesta');
+      else if (cs === 'buzon') tags.push('Buzón lleno');
+      else if (cs === 'whatsapp') tags.push('Contacto por WhatsApp');
 
       let enrollmentDate = new Date().toISOString().split('T')[0];
       const ingresoMatch = observations.match(/Ingreso\s+(\d{1,2})\/(\d{1,2})/);
@@ -149,13 +167,15 @@ export async function parseStudentsFromAttendanceFile(
       });
     }
 
+    console.log(`[parseStudents] Estudiantes parseados: ${students.length}, errores: ${errors.length}`);
+
     return {
       success: errors.length === 0,
       data: students,
       errors,
       warnings: [],
       stats: {
-        totalRows: rawRows.length - 4,
+        totalRows: dataRows.length,
         validRows: students.length,
         invalidRows: errors.length,
       },
