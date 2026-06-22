@@ -15,7 +15,7 @@ import { toast } from 'sonner';
 import type { FileType } from '@/features/ingestion/types';
 
 const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[]; description: string }[] = [
-  { fileType: 'attendance', acceptedExtensions: ['.csv', '.xlsx'], description: 'CSV/XLSX con fechas y estados de asistencia' },
+  { fileType: 'attendance', acceptedExtensions: ['.xlsx'], description: 'XLSX con hojas Mayo, Junio, Julio, Agosto + Notas' },
   { fileType: 'progress', acceptedExtensions: ['.csv'], description: 'CSV de SENCE (progress.*.csv) con actividades' },
   { fileType: 'dedication', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX de SENCE (dedication.*.xlsx) con minutos' },
   { fileType: 'syllabus', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX del cronograma del curso (CRONOGRAMA*.xlsx)' },

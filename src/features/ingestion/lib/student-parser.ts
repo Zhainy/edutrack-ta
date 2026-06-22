@@ -124,11 +124,32 @@ export async function parseStudentCSV(file: File): Promise<ParseResult<RawStuden
   });
 }
 
+function cleanName(name: string): string {
+  if (!name) return name;
+  return name
+    .replace(/[\uFF81]/g, 'á')
+    .replace(/[\uFF8D]/g, 'í')
+    .replace(/[\uFF91]/g, 'ñ')
+    .replace(/[\uFF93]/g, 'ó')
+    .replace(/[\uFF95]/g, 'ú')
+    .replace(/[\uFF7B]/g, 'Á')
+    .replace(/[\uFF89]/g, 'Í')
+    .replace(/[\uFF85]/g, 'Ñ')
+    .replace(/[\uFF75]/g, 'Ó')
+    .replace(/[\uFF95]/g, 'Ú')
+    .replace(/[\uFF84]/g, 'é')
+    .replace(/[\uFF9D]/g, 'ü')
+    .trim();
+}
+
 export async function parseStudentXLSX(file: File): Promise<ParseResult<RawStudentImport>> {
   try {
     const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', codepage: 65001 });
-    const sheetName = workbook.SheetNames[0];
+    const workbook = XLSX.read(buffer, { type: 'array', codepage: 65001, cellStyles: true });
+    // Prefer "Lista" sheet if present, otherwise use first sheet
+    const sheetName = workbook.SheetNames.includes('Lista')
+      ? 'Lista'
+      : workbook.SheetNames[0];
     const sheet = workbook.Sheets[sheetName];
 
     if (!sheet) {
@@ -165,7 +186,7 @@ export async function parseStudentXLSX(file: File): Promise<ParseResult<RawStude
       for (const [orig, target] of Object.entries(headerMapping)) {
         const val = rawRow[orig];
         if (val !== undefined && val !== null && String(val).trim() !== '') {
-          mapped[target] = String(val).trim();
+          mapped[target] = cleanName(String(val).trim());
         }
       }
 

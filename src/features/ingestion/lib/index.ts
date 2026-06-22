@@ -6,6 +6,8 @@ export type { XlsxParseOptions } from './xlsx-parser';
 
 export { parseSyllabusXLSX } from './syllabus-parser';
 
+export { parseAttendanceXLSX } from './attendance-parser';
+
 export { parseStudentCSV, parseStudentXLSX } from './student-parser';
 export type { RawStudentImport } from './student-parser';
 

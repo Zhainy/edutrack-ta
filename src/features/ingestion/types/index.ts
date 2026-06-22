@@ -31,6 +31,7 @@ export interface ParseResult<T> {
     validRows: number;
     invalidRows: number;
   };
+  extra?: Record<string, unknown>;
 }
 
 // ── Normalized entity results ────────────────────────────────────────────

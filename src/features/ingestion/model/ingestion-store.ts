@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { toast } from 'sonner';
-import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV } from '../lib';
+import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV, parseAttendanceXLSX } from '../lib';
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
   RawAttendanceSchema,
@@ -12,6 +12,7 @@ import {
   bulkUpsertProgress,
   bulkUpsertDedication,
   bulkUpsertSyllabus,
+  bulkUpsertNotes,
   addUploadLog,
   getUploadLogs,
   clearUploadLogs,
@@ -164,6 +165,25 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
             warnings: result.warnings,
             stats: result.stats,
           };
+        } else if (fileType === 'attendance' && format === 'xlsx') {
+          const result = await parseAttendanceXLSX(file);
+          parseResult = {
+            success: result.success,
+            data: result.data as unknown as Record<string, string>[],
+            errors: result.errors,
+            warnings: result.warnings,
+            stats: result.stats,
+          };
+          // Save extracted notes from cell comments and "Notas" sheet
+          const extraNotes = result.extra?.notes as unknown[] | undefined;
+          if (extraNotes && extraNotes.length > 0) {
+            try {
+              await bulkUpsertNotes(extraNotes as never);
+              console.log(`[ingestion-store] Saved ${extraNotes.length} notes from attendance`);
+            } catch (noteErr) {
+              console.error('[ingestion-store] Error saving attendance notes:', noteErr);
+            }
+          }
         } else {
           const mappings = DEFAULT_COLUMN_MAPPINGS[fileType as keyof typeof DEFAULT_COLUMN_MAPPINGS] ?? [];
           parseResult = format === 'csv'
@@ -190,7 +210,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         // 3. SENCE parsers (dedication, progress, syllabus) return typed entities directly
         //    Skip Zod/normalize pipeline and go straight to bulkUpsert.
         //    Other types (attendance, students) go through full validation pipeline.
-        const SENCE_TYPES: FileType[] = ['dedication', 'progress', 'syllabus'];
+        const SENCE_TYPES: FileType[] = ['attendance', 'dedication', 'progress', 'syllabus'];
 
         set({ status: 'validating' });
         const rawRows = parseResult.data;
