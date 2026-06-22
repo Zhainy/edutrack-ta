@@ -8,6 +8,8 @@ export { parseSyllabusXLSX } from './syllabus-parser';
 
 export { parseAttendanceXLSX } from './attendance-parser';
 
+export { parseModuleGradesXLSX } from './module-grades-parser';
+
 export { parseStudentCSV, parseStudentXLSX } from './student-parser';
 export type { RawStudentImport } from './student-parser';
 

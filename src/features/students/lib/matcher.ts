@@ -1,7 +1,17 @@
 import { db } from '@/shared/lib/database';
 
+const CHAR_MAP: Record<string, string> = {
+  'ﾍ': 'i', 'ﾁ': 'a', 'ﾑ': 'n', 'ﾓ': 'o', 'ﾕ': 'u',
+  'ｻ': 'A', 'ﾉ': 'e', 'ﾅ': 'N', 'ｵ': 'O',
+  'ﾌ': 'e', '｣': 'o', '｢': 'O', 'ｩ': 'u', 'ｳ': 'o',
+};
+
 function normalize(s: string): string {
-  return s
+  let cleaned = s;
+  for (const [corrupt, correct] of Object.entries(CHAR_MAP)) {
+    cleaned = cleaned.split(corrupt).join(correct);
+  }
+  return cleaned
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()

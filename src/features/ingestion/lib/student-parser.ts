@@ -124,22 +124,30 @@ export async function parseStudentCSV(file: File): Promise<ParseResult<RawStuden
   });
 }
 
+const CHAR_MAP: Record<string, string> = {
+  'ﾍ': 'í',
+  'ﾁ': 'á',
+  'ﾑ': 'ñ',
+  'ﾓ': 'ó',
+  'ﾕ': 'ú',
+  'ｻ': 'Á',
+  'ﾉ': 'é',
+  'ﾅ': 'Ñ',
+  'ｵ': 'Ó',
+  'ﾌ': 'é',
+  '｣': 'ó',
+  '｢': 'Ó',
+  'ｩ': 'ú',
+  'ｳ': 'ó',
+};
+
 function cleanName(name: string): string {
   if (!name) return name;
-  return name
-    .replace(/[\uFF81]/g, 'á')
-    .replace(/[\uFF8D]/g, 'í')
-    .replace(/[\uFF91]/g, 'ñ')
-    .replace(/[\uFF93]/g, 'ó')
-    .replace(/[\uFF95]/g, 'ú')
-    .replace(/[\uFF7B]/g, 'Á')
-    .replace(/[\uFF89]/g, 'Í')
-    .replace(/[\uFF85]/g, 'Ñ')
-    .replace(/[\uFF75]/g, 'Ó')
-    .replace(/[\uFF95]/g, 'Ú')
-    .replace(/[\uFF84]/g, 'é')
-    .replace(/[\uFF9D]/g, 'ü')
-    .trim();
+  let cleaned = name;
+  for (const [corrupt, correct] of Object.entries(CHAR_MAP)) {
+    cleaned = cleaned.split(corrupt).join(correct);
+  }
+  return cleaned.trim();
 }
 
 export async function parseStudentXLSX(file: File): Promise<ParseResult<RawStudentImport>> {

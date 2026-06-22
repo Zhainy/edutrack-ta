@@ -5,6 +5,7 @@ import type { AttendanceRecord } from '@/entities/attendance';
 import type { ProgressRecord } from '@/entities/progress';
 import type { DedicationRecord } from '@/entities/dedication';
 import type { SyllabusModule } from '@/entities/syllabus';
+import type { ModuleGrade } from '@/entities/module-grade';
 import type { Note } from '@/entities/note';
 import type { UploadLog } from '@/entities/upload-log';
 
@@ -17,6 +18,7 @@ export class EduTrackDatabase extends Dexie {
   syllabus!: Table<SyllabusModule, string>;
   notes!: Table<Note, string>;
   uploadLogs!: Table<UploadLog, string>;
+  moduleGrades!: Table<ModuleGrade, string>;
 
   constructor() {
     super('edutrack-ta');
@@ -49,6 +51,11 @@ export class EduTrackDatabase extends Dexie {
     // v4 — add code indexes on cohorts
     this.version(4).stores({
       cohorts: 'id, code, name, startDate, endDate, [code+startDate]',
+    });
+
+    // v5 — add moduleGrades table
+    this.version(5).stores({
+      moduleGrades: 'id, studentId, cohortId, moduleNumber, [studentId+moduleNumber]',
     });
   }
 }

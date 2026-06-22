@@ -82,17 +82,20 @@ export async function getStudentMetrics(
   const progress = await db.progress.where('studentId').equals(studentId).toArray();
   const syllabus = await db.syllabus.where('cohortId').equals(student.cohortId).toArray();
 
-  const totalHours = dedication.reduce((sum, d) => sum + d.hours, 0);
-  const expectedHours = syllabus.reduce((sum, s) => sum + s.expectedHours, 0);
-  const hoursPercentage = expectedHours > 0 ? (totalHours / expectedHours) * 100 : 0;
+  const totalHours = dedication.reduce((sum, d) => sum + (d.hours || 0), 0);
+  const today = new Date();
+  const expectedHours = syllabus
+    .filter(s => new Date(s.endDate) <= today)
+    .reduce((sum, s) => sum + (s.expectedHours || 0), 0);
+  const hoursPercentage = expectedHours > 0 ? Math.min((totalHours / expectedHours) * 100, 100) : 0;
 
   const presentClasses = attendance.filter(a => a.status === 'present' || a.status === 'late').length;
-  const absentClasses = attendance.filter(a => a.status === 'absent').length;
   const totalClasses = attendance.length;
+  const absentClasses = totalClasses - presentClasses;
   const attendanceRate = totalClasses > 0 ? (presentClasses / totalClasses) * 100 : 100;
 
   const completedActivities = progress.filter(p => p.completed).length;
-  const totalActivities = syllabus.reduce((sum, s) => sum + s.activities.length, 0);
+  const totalActivities = syllabus.reduce((sum, s) => sum + (s.activities?.length || 0), 0);
   const activityPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
 
   const risk = calculateRisk({

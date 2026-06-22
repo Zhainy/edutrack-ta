@@ -4,6 +4,7 @@ import type { AttendanceRecord } from '@/entities/attendance';
 import type { ProgressRecord } from '@/entities/progress';
 import type { DedicationRecord } from '@/entities/dedication';
 import type { SyllabusModule } from '@/entities/syllabus';
+import type { ModuleGrade } from '@/entities/module-grade';
 import type { Note } from '@/entities/note';
 import type { UploadLog } from '@/entities/upload-log';
 
@@ -42,6 +43,13 @@ export async function bulkUpsertSyllabus(modules: SyllabusModule[]): Promise<num
   console.log(`[ingestion-api] Upserting ${modules.length} syllabus modules`);
   await db.syllabus.bulkPut(modules);
   return modules.length;
+}
+
+export async function bulkUpsertModuleGrades(grades: ModuleGrade[]): Promise<number> {
+  if (grades.length === 0) return 0;
+  console.log(`[ingestion-api] Upserting ${grades.length} module grades`);
+  await db.moduleGrades.bulkPut(grades);
+  return grades.length;
 }
 
 export async function bulkUpsertNotes(notes: Note[]): Promise<number> {

@@ -1,6 +1,7 @@
 import * as XLSX from 'xlsx';
 import type { ParseResult, ValidationError } from '../types';
 import type { AttendanceRecord } from '@/entities/attendance';
+import type { ModuleGrade } from '@/entities/module-grade';
 import type { Note } from '@/entities/note';
 
 const MONTH_SHEETS = ['Mayo', 'Junio', 'Julio', 'Agosto'];
@@ -11,21 +12,36 @@ const MONTH_NUMBERS: Record<string, number> = {
 
 const YEAR = 2026;
 
+const CHAR_MAP: Record<string, string> = {
+  'ﾍ': 'í',
+  'ﾁ': 'á',
+  'ﾑ': 'ñ',
+  'ﾓ': 'ó',
+  'ﾕ': 'ú',
+  'ｻ': 'Á',
+  'ﾉ': 'é',
+  'ﾅ': 'Ñ',
+  'ｵ': 'Ó',
+  'ﾌ': 'é',
+  '｣': 'ó',
+  '｢': 'Ó',
+  'ｩ': 'ú',
+  'ｳ': 'ó',
+};
+
 function cleanStudentName(name: string): string {
   if (!name) return name;
-  return name
-    .replace(/[\uFF81]/g, 'á')
-    .replace(/[\uFF8D]/g, 'í')
-    .replace(/[\uFF91]/g, 'ñ')
-    .replace(/[\uFF93]/g, 'ó')
-    .replace(/[\uFF95]/g, 'ú')
-    .replace(/[\uFF7B]/g, 'Á')
-    .replace(/[\uFF89]/g, 'Í')
-    .replace(/[\uFF85]/g, 'Ñ')
-    .replace(/[\uFF75]/g, 'Ó')
-    .replace(/[\uFF84]/g, 'é')
-    .replace(/[\uFF9D]/g, 'ü')
-    .trim();
+  let cleaned = name;
+  for (const [corrupt, correct] of Object.entries(CHAR_MAP)) {
+    cleaned = cleaned.split(corrupt).join(correct);
+  }
+  return cleaned.trim();
+}
+
+function isWeekend(year: number, month: number, day: number): boolean {
+  const d = new Date(year, month - 1, day);
+  const dow = d.getDay();
+  return dow === 0 || dow === 6;
 }
 
 function mapStatus(code: string): AttendanceRecord['status'] | null {
@@ -100,6 +116,9 @@ export async function parseAttendanceXLSX(
 
           const dateStr = `${YEAR}-${String(monthNum).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
 
+          // Skip weekends (classes are Mon-Fri per syllabus)
+          if (isWeekend(YEAR, monthNum, day)) continue;
+
           // Read cell comment if present
           const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
           const commentText = (sheet[cellRef] as { c?: Array<{ t?: string }> } | undefined)?.c?.[0]?.t ?? '';
@@ -135,28 +154,65 @@ export async function parseAttendanceXLSX(
 
     // Parse "Notas" sheet for final module evaluations
     const notasSheet = workbook.Sheets['Notas'];
+    const moduleGrades: ModuleGrade[] = [];
     if (notasSheet && notasSheet['!ref']) {
-      const notasRange = XLSX.utils.decode_range(notasSheet['!ref']);
+      const rawNotasData: unknown[][] = XLSX.utils.sheet_to_json(notasSheet, {
+        header: 1, defval: '', raw: false,
+      });
 
-      for (let row = notasRange.s.r + 1; row <= notasRange.e.r; row++) {
-        const nameCell = notasSheet[XLSX.utils.encode_cell({ r: row, c: 0 })];
-        const rawName = nameCell ? String(nameCell.v ?? '').trim() : '';
+      // Row 0: headers
+      const notaHeaders = rawNotasData[0] ?? [];
+      const gradeCols: { col: number; moduleNumber: number }[] = [];
+      for (let c = 1; c < notaHeaders.length; c++) {
+        const h = String(notaHeaders[c] ?? '').trim();
+        const m = h.match(/M[oó]dulo\s*(\d+)/i);
+        if (m) gradeCols.push({ col: c, moduleNumber: parseInt(m[1], 10) });
+      }
+
+      const now = new Date().toISOString();
+
+      for (let rowIdx = 2; rowIdx < rawNotasData.length; rowIdx++) {
+        const row = rawNotasData[rowIdx];
+        if (!row || row.length < 2) continue;
+
+        const rawName = String(row[0] ?? '').trim();
         const studentName = cleanStudentName(rawName);
         if (!studentName) continue;
 
-        // Collect module notes from columns B onwards
-        for (let col = 1; col <= notasRange.e.c; col++) {
-          const valCell = notasSheet[XLSX.utils.encode_cell({ r: row, c: col })];
-          if (!valCell) continue;
-          const val = String(valCell.v ?? '').trim();
-          if (!val) continue;
+        for (const { col, moduleNumber } of gradeCols) {
+          const cellValue = row[col] as string | undefined;
+          if (cellValue === undefined || cellValue === null) continue;
+
+          const cellText = String(cellValue).trim();
+          if (!cellText) continue;
+
+          let grade: number | null = null;
+          let isPending = false;
+
+          if (cellText.toUpperCase() === 'PENDIENTE') {
+            isPending = true;
+          } else {
+            const parsed = parseFloat(cellText.replace(',', '.'));
+            if (!isNaN(parsed)) grade = parsed;
+          }
+
+          moduleGrades.push({
+            id: crypto.randomUUID(),
+            studentId: '',
+            cohortId: '',
+            moduleNumber,
+            grade,
+            isPending,
+            createdAt: now,
+            updatedAt: now,
+          });
 
           allNotes.push({
             id: crypto.randomUUID(),
             studentId: '',
             type: 'alert',
-            title: `Evaluación Módulo ${col}`,
-            content: `${studentName}: ${val}`,
+            title: `Evaluación Módulo ${moduleNumber}`,
+            content: `${studentName}: ${cellText}`,
             priority: 'medium',
             isCompleted: false,
             createdAt: new Date().toISOString(),
@@ -166,7 +222,7 @@ export async function parseAttendanceXLSX(
       }
     }
 
-    console.log(`[attendance-parser] ${allRecords.length} records, ${allNotes.length} notes from ${MONTH_SHEETS.filter((m) => workbook.Sheets[m]).length} sheet(s)`);
+    console.log(`[attendance-parser] ${allRecords.length} records, ${allNotes.length} notes, ${moduleGrades.length} grades from ${MONTH_SHEETS.filter((m) => workbook.Sheets[m]).length} sheet(s)`);
 
     return {
       success: errors.length === 0,
@@ -178,7 +234,7 @@ export async function parseAttendanceXLSX(
         validRows: allRecords.length,
         invalidRows: errors.length,
       },
-      extra: { notes: allNotes },
+      extra: { notes: allNotes, moduleGrades },
     };
   } catch (err) {
     const message = err instanceof Error ? err.message : 'Error al leer XLSX';

@@ -13,6 +13,7 @@ import {
   bulkUpsertDedication,
   bulkUpsertSyllabus,
   bulkUpsertNotes,
+  bulkUpsertModuleGrades,
   addUploadLog,
   getUploadLogs,
   clearUploadLogs,
@@ -182,6 +183,16 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
               console.log(`[ingestion-store] Saved ${extraNotes.length} notes from attendance`);
             } catch (noteErr) {
               console.error('[ingestion-store] Error saving attendance notes:', noteErr);
+            }
+          }
+          // Save module grades from "Notas" sheet
+          const extraGrades = result.extra?.moduleGrades as unknown[] | undefined;
+          if (extraGrades && extraGrades.length > 0) {
+            try {
+              await bulkUpsertModuleGrades(extraGrades as never);
+              console.log(`[ingestion-store] Saved ${extraGrades.length} module grades`);
+            } catch (gradeErr) {
+              console.error('[ingestion-store] Error saving module grades:', gradeErr);
             }
           }
         } else {
