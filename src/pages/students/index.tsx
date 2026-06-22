@@ -33,13 +33,15 @@ import { db } from '@/shared/lib/database';
 import { Modal } from '@/shared/ui/modal';
 import { toast } from '@/shared/ui/toast';
 import { calculateRisk } from '@/features/risk-engine';
-import { deleteStudent } from '@/features/students';
+import { deleteStudent, getPendingActivities } from '@/features/students';
 import type { Student } from '@/entities/student';
 import type { RiskOutput } from '@/features/risk-engine';
 
 interface StudentWithRisk {
   student: Student;
   risk: RiskOutput | null;
+  pendingCount: number;
+  overdueCount: number;
 }
 
 type StatusFilter = 'all' | 'active' | 'dropout' | 'inactive';
@@ -186,20 +188,25 @@ export function StudentsPage() {
 
         const referenceDate = new Date();
 
-        const withRisk: StudentWithRisk[] = students.map((student) => {
-          if (student.status !== 'active') {
-            return { student, risk: null };
-          }
-          const risk = calculateRisk({
-            student,
-            attendance: allAttendance.filter((a) => a.studentId === student.id),
-            progress: allProgress.filter((p) => p.studentId === student.id),
-            dedication: allDedication.filter((d) => d.studentId === student.id),
-            syllabus: allSyllabus.filter((m) => m.cohortId === student.cohortId),
-            referenceDate,
-          });
-          return { student, risk };
-        });
+        const withRisk: StudentWithRisk[] = await Promise.all(
+          students.map(async (student) => {
+            if (student.status !== 'active') {
+              return { student, risk: null, pendingCount: 0, overdueCount: 0 };
+            }
+            const risk = calculateRisk({
+              student,
+              attendance: allAttendance.filter((a) => a.studentId === student.id),
+              progress: allProgress.filter((p) => p.studentId === student.id),
+              dedication: allDedication.filter((d) => d.studentId === student.id),
+              syllabus: allSyllabus.filter((m) => m.cohortId === student.cohortId),
+              referenceDate,
+            });
+            const pending = await getPendingActivities(student.id);
+            const pendingCount = pending.length;
+            const overdueCount = pending.filter(a => a.isOverdue).length;
+            return { student, risk, pendingCount, overdueCount };
+          })
+        );
 
         if (!cancelled) {
           setData(withRisk);
@@ -349,6 +356,22 @@ export function StudentsPage() {
         },
         enableSorting: true,
         sortUndefined: 'last',
+      },
+      {
+        id: 'pending',
+        header: 'Pendientes',
+        accessorFn: (row) => row.overdueCount,
+        cell: ({ row }) => {
+          const { pendingCount, overdueCount } = row.original;
+          if (overdueCount > 0) {
+            return <Badge variant="risk-high">{overdueCount} atrasadas</Badge>;
+          }
+          if (pendingCount > 0) {
+            return <Badge variant="risk-medium">{pendingCount} pendientes</Badge>;
+          }
+          return <Badge variant="active">Al día</Badge>;
+        },
+        enableSorting: true,
       },
       {
         id: 'tags',

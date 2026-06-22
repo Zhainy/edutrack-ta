@@ -6,7 +6,7 @@ export type { XlsxParseOptions } from './xlsx-parser';
 
 export { parseSyllabusXLSX } from './syllabus-parser';
 
-export { parseAttendanceXLSX } from './attendance-parser';
+export { parseAttendanceXLSX, parseStudentsFromAttendanceFile } from './attendance-parser';
 
 export { parseModuleGradesXLSX } from './module-grades-parser';
 

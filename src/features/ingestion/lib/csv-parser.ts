@@ -143,7 +143,32 @@ function parseSpanishDate(dateStr: string): string | null {
   return null;
 }
 
-function extractModuleNumber(activityName: string): number | null {
+function extractModuleNumber(activityName: string, activityDate?: string | null): number | null {
+  // If we have a date, use date-based mapping (most precise)
+  if (activityDate) {
+    const d = new Date(activityDate + 'T00:00:00');
+    if (!isNaN(d.getTime())) {
+      // M1: 14/5/2026 - 18/5/2026
+      if (d >= new Date('2026-05-14') && d < new Date('2026-05-19')) return 1;
+      // M2: 18/5/2026 - 3/6/2026
+      if (d >= new Date('2026-05-19') && d < new Date('2026-06-04')) return 2;
+      // M3: 3/6/2026 - 15/6/2026
+      if (d >= new Date('2026-06-04') && d < new Date('2026-06-16')) return 3;
+      // M4: 16/6/2026 - 26/6/2026
+      if (d >= new Date('2026-06-16') && d < new Date('2026-06-29')) return 4;
+      // M5: 29/6/2026 - 8/7/2026
+      if (d >= new Date('2026-06-29') && d < new Date('2026-07-09')) return 5;
+      // M6: 8/7/2026 - 24/7/2026
+      if (d >= new Date('2026-07-09') && d < new Date('2026-07-27')) return 6;
+      // M7: 27/7/2026 - 11/8/2026
+      if (d >= new Date('2026-07-27') && d < new Date('2026-08-12')) return 7;
+      // M8: 11/8/2026 - 14/8/2026
+      if (d >= new Date('2026-08-12') && d < new Date('2026-08-15')) return 8;
+      // M9: 14/8/2026 onwards
+      if (d >= new Date('2026-08-15')) return 9;
+    }
+  }
+
   const name = activityName.toLowerCase();
 
   // Direct match on "módulo N"
@@ -303,7 +328,7 @@ export async function parseProgressCSV(
                   studentId: '',
                   studentEmail: email,
                   activityName: statusColumn || `Actividad #${Math.floor(i / 2)}`,
-                  moduleNumber: extractModuleNumber(statusColumn || '') ?? undefined,
+                  moduleNumber: extractModuleNumber(statusColumn || '', completionDate) ?? undefined,
                   completed: isCompleted,
                   completionDate: completionDate ?? undefined,
                   score: approved ? 100 : undefined,

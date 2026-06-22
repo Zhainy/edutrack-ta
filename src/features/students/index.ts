@@ -14,3 +14,6 @@ export type { StudentMetrics } from './api/students-api';
 export { useStudentsStore } from './model/students-store';
 
 export { findStudentId, matchAllRecords } from './lib/matcher';
+
+export { getPendingActivities } from './lib/pending-activities';
+export type { PendingActivity } from './lib/pending-activities';

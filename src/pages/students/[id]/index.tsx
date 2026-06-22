@@ -45,7 +45,9 @@ import { cn } from '@/shared/lib/utils';
 import { formatDate, toISODate } from '@/shared/lib/date';
 import { db } from '@/shared/lib/database';
 import { calculateRisk } from '@/features/risk-engine';
+import { getPendingActivities } from '@/features/students/lib/pending-activities';
 import type { Student } from '@/entities/student';
+import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
 import type { ProgressRecord } from '@/entities/progress';
 import type { DedicationRecord } from '@/entities/dedication';
@@ -1093,9 +1095,119 @@ function NotasTab({ studentId }: { studentId: string }) {
   );
 }
 
+// ── Tab: Actividades Pendientes ─────────────────────────────────────────
+
+function PendientesTab({ studentId }: { studentId: string }) {
+  const [activities, setActivities] = useState<PendingActivity[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      const data = await getPendingActivities(studentId);
+      if (!cancelled) {
+        setActivities(data);
+        setLoading(false);
+      }
+    }
+    void load();
+    return () => { cancelled = true; };
+  }, [studentId]);
+
+  const overdue = activities.filter(a => a.isOverdue);
+  const upcoming = activities.filter(a => !a.isOverdue);
+
+  if (loading) {
+    return (
+      <div className="space-y-4">
+        {[1, 2, 3].map(i => <Skeleton key={i} variant="text" lines={1} />)}
+      </div>
+    );
+  }
+
+  if (activities.length === 0) {
+    return (
+      <EmptyState
+        icon={<CheckCircle2 size={24} strokeWidth={1.5} />}
+        title="¡Al día!"
+        description="No hay actividades pendientes para este estudiante."
+      />
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      {/* Stats */}
+      <div className="grid grid-cols-2 gap-3">
+        <div className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/20 text-center">
+          <p className="text-2xl font-bold font-mono text-rose-400">{overdue.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Atrasadas</p>
+        </div>
+        <div className="p-3 rounded-lg bg-amber-400/10 border border-amber-400/20 text-center">
+          <p className="text-2xl font-bold font-mono text-amber-400">{upcoming.length}</p>
+          <p className="text-xs text-slate-500 mt-1">Por vencer</p>
+        </div>
+      </div>
+
+      {/* Overdue list */}
+      {overdue.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-rose-400">Atrasadas</h4>
+          {overdue.map((a, i) => (
+            <div
+              key={i}
+              className="p-3 rounded-lg bg-rose-500/10 border border-rose-500/30"
+            >
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{a.activityName}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Módulo {a.moduleNumber}: {a.moduleName}
+                  </p>
+                </div>
+                <Badge variant="risk-high">
+                  {a.daysOverdue}d atrasado
+                </Badge>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Esperado: {formatDate(a.expectedDate)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Upcoming list */}
+      {upcoming.length > 0 && (
+        <div className="space-y-2">
+          <h4 className="text-sm font-semibold text-amber-400">Próximas</h4>
+          {upcoming.map((a, i) => (
+            <div
+              key={i}
+              className="p-3 rounded-lg bg-amber-400/10 border border-amber-400/30"
+            >
+              <div className="flex justify-between items-start gap-2">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-slate-200 truncate">{a.activityName}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Módulo {a.moduleNumber}: {a.moduleName}
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-slate-500 mt-1">
+                Esperado: {formatDate(a.expectedDate)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Main page component ────────────────────────────────────────────────
 
-type TabValue = 'resumen' | 'asistencia' | 'progreso' | 'dedicacion' | 'notas';
+type TabValue = 'resumen' | 'asistencia' | 'progreso' | 'dedicacion' | 'notas' | 'pendientes';
 
 export function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1265,6 +1377,7 @@ export function StudentDetailPage() {
     { value: 'asistencia', label: 'Asistencia' },
     { value: 'progreso', label: 'Progreso' },
     { value: 'dedicacion', label: 'Dedicación' },
+    { value: 'pendientes', label: 'Pendientes' },
     { value: 'notas', label: 'Notas' },
   ];
 
@@ -1402,6 +1515,9 @@ export function StudentDetailPage() {
           </Tabs.Content>
           <Tabs.Content value="dedicacion" className="animate-fade-in">
             <DedicacionTab studentId={student.id} syllabus={syllabus} />
+          </Tabs.Content>
+          <Tabs.Content value="pendientes" className="animate-fade-in">
+            <PendientesTab studentId={student.id} />
           </Tabs.Content>
           <Tabs.Content value="notas" className="animate-fade-in">
             <NotasTab studentId={student.id} />

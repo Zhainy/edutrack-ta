@@ -3,6 +3,7 @@ import type { ParseResult, ValidationError } from '../types';
 import type { AttendanceRecord } from '@/entities/attendance';
 import type { ModuleGrade } from '@/entities/module-grade';
 import type { Note } from '@/entities/note';
+import type { Student } from '@/entities/student';
 
 const MONTH_SHEETS = ['Mayo', 'Junio', 'Julio', 'Agosto'];
 
@@ -50,6 +51,125 @@ function mapStatus(code: string): AttendanceRecord['status'] | null {
   if (c === 'A') return 'absent';
   if (c === 'X') return 'excused';
   return null;
+}
+
+export async function parseStudentsFromAttendanceFile(
+  file: File,
+  cohortId: string
+): Promise<ParseResult<Student>> {
+  console.log(`[attendance-parser] Parsing students from attendance XLSX: ${file.name}`);
+
+  try {
+    const buffer = await file.arrayBuffer();
+    const workbook = XLSX.read(buffer, { type: 'array' });
+
+    const sheet = workbook.Sheets['Lista'];
+    if (!sheet) {
+      return {
+        success: false,
+        data: [],
+        errors: [{ row: 0, column: 'Sheet', message: 'No se encontró hoja "Lista" en el archivo', value: undefined }],
+        warnings: [],
+        stats: { totalRows: 0, validRows: 0, invalidRows: 0 },
+      };
+    }
+
+    const rawRows: unknown[][] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '', raw: false });
+    const students: Student[] = [];
+    const errors: ValidationError[] = [];
+
+    for (let rowIndex = 4; rowIndex < rawRows.length; rowIndex++) {
+      const row = rawRows[rowIndex];
+      if (!row || row.length < 2) continue;
+
+      const rut = String(row[0] ?? '').trim();
+      const fullName = String(row[1] ?? '').trim();
+      const contactStatus = String(row[2] ?? '').trim();
+      const email = String(row[3] ?? '').trim();
+      const phone = String(row[4] ?? '').trim();
+      const observations = String(row[5] ?? '').trim();
+
+      if (!fullName || !email) {
+        errors.push({
+          row: rowIndex + 1,
+          column: 'Nombre/Email',
+          message: 'Nombre y email son requeridos',
+          value: { fullName, email },
+        });
+        continue;
+      }
+
+      let status: Student['status'] = 'active';
+      const tags: string[] = [];
+
+      if (observations.toUpperCase().includes('DESERTOR')) {
+        status = 'dropout';
+        tags.push('Desertor');
+      }
+      if (observations.toUpperCase().includes('REEMPLAZO')) {
+        tags.push('Reemplazo');
+      }
+      if (observations.toUpperCase().includes('SUBSIDIO')) {
+        tags.push('Subsidio de cuidado');
+      }
+
+      const cs = contactStatus.toLowerCase();
+      if (cs.includes('no contesta')) tags.push('No contesta');
+      else if (cs.includes('buzon')) tags.push('Buzón lleno');
+      else if (cs.includes('whatsapp')) tags.push('Contacto por WhatsApp');
+      else if (cs === 'bien') tags.push('Contacto exitoso');
+
+      let enrollmentDate = new Date().toISOString().split('T')[0];
+      const ingresoMatch = observations.match(/Ingreso\s+(\d{1,2})\/(\d{1,2})/);
+      if (ingresoMatch) {
+        const day = ingresoMatch[1].padStart(2, '0');
+        const month = ingresoMatch[2].padStart(2, '0');
+        enrollmentDate = `2026-${month}-${day}`;
+      }
+
+      const cleanName = cleanStudentName(fullName);
+
+      students.push({
+        id: crypto.randomUUID(),
+        cohortId,
+        externalId: rut || email,
+        fullName: cleanName,
+        email,
+        status,
+        enrollmentDate,
+        tags,
+        metadata: {
+          rut,
+          telefono: phone,
+          contactStatus,
+          observations,
+        },
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+    }
+
+    return {
+      success: errors.length === 0,
+      data: students,
+      errors,
+      warnings: [],
+      stats: {
+        totalRows: rawRows.length - 4,
+        validRows: students.length,
+        invalidRows: errors.length,
+      },
+    };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error al leer XLSX';
+    return {
+      success: false,
+      data: [],
+      errors: [{ row: 0, column: 'general', message: `Error al leer archivo: ${message}`, value: undefined }],
+      warnings: [],
+      stats: { totalRows: 0, validRows: 0, invalidRows: 1 },
+    };
+  }
 }
 
 export async function parseAttendanceXLSX(
