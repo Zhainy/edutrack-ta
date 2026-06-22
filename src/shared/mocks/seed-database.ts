@@ -4,7 +4,6 @@ import { mockStudents } from './students';
 import { mockAttendance } from './attendance';
 import { mockProgress } from './progress';
 import { mockDedication } from './dedication';
-import { mockSyllabus } from './syllabus';
 import { mockNotes } from './notes';
 
 export async function seedDatabase(): Promise<void> {
@@ -21,13 +20,21 @@ export async function seedDatabase(): Promise<void> {
       async () => {
         await db.cohorts.bulkAdd(mockCohorts);
         await db.students.bulkAdd(mockStudents);
-        await db.syllabus.bulkAdd(mockSyllabus);
         await db.attendance.bulkAdd(mockAttendance);
         await db.progress.bulkAdd(mockProgress);
         await db.dedication.bulkAdd(mockDedication);
         await db.notes.bulkAdd(mockNotes);
       }
     );
+
+    // Check if syllabus was already loaded (e.g., from cronograma file)
+    const syllabusCount = await db.syllabus.count();
+    if (syllabusCount === 0) {
+      console.log(
+        '⚠️ No hay módulos cargados. Ir a /ingestion y cargar el cronograma ' +
+        '(CRONOGRAMA*.xlsx) para ver los 9 módulos reales del curso Front-End con Vue.js.'
+      );
+    }
 
     console.log(
       `✅ Database seeded: ${mockStudents.length} students, ` +

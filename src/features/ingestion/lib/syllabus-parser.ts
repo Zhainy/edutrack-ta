@@ -15,6 +15,7 @@ function parseDate(dateStr: string): string {
 interface RawModuleEntry {
   moduleNumber: number;
   moduleName: string;
+  learningOutcome: string;
   day: number;
   syncHours: number;
   asyncHours: number;
@@ -64,6 +65,7 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
 
       const colA = String(row[0] ?? '').trim();
       const colB = String(row[1] ?? '').trim();
+      const colC = String(row[2] ?? '').trim();  // Learning outcome
       const colD = String(row[3] ?? '').trim();  // Day
       const colE = String(row[4] ?? '').trim();  // Sync hours
       const colF = String(row[5] ?? '').trim();  // Async hours
@@ -80,6 +82,9 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
 
       if (!currentModule) continue;
 
+      // Skip rows without a date (total/summary rows, empty rows)
+      if (!colG) continue;
+
       const day = parseInt(colD, 10);
       const syncHours = parseFloat(colE.replace(',', '.')) || 0;
       const asyncHours = parseFloat(colF.replace(',', '.')) || 0;
@@ -87,6 +92,7 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
       moduleEntries.push({
         moduleNumber: currentModule.number,
         moduleName: currentModule.name,
+        learningOutcome: colC,
         day: isNaN(day) ? 0 : day,
         syncHours,
         asyncHours,
@@ -122,6 +128,7 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
         activities: entries.map((e) => {
           const parts: string[] = [];
           if (e.day) parts.push(`Día ${e.day}`);
+          if (e.learningOutcome) parts.push(e.learningOutcome);
           if (e.schedule) parts.push(e.schedule);
           if (e.date) parts.push(e.date);
           if (e.syncHours > 0) parts.push(`${e.syncHours}h sinc.`);

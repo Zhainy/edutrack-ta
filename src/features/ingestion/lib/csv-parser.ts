@@ -144,10 +144,25 @@ function parseSpanishDate(dateStr: string): string | null {
 }
 
 function extractModuleNumber(activityName: string): number | null {
-  const moduleMatch = activityName.match(/m[oó]dulo\s*(\d+)/i);
+  const name = activityName.toLowerCase();
+
+  // Direct match on "módulo N"
+  const moduleMatch = name.match(/m[oó]dulo\s*(\d+)/i);
   if (moduleMatch) return parseInt(moduleMatch[1], 10);
 
-  const classMatch = activityName.match(/clase\s*(\d+)/i);
+  // Match by activity content keywords
+  if (name.includes('orientación') || name.includes('metodología') || name.includes('perfil')) return 1;
+  if (name.includes('front-end') || name.includes('html') || name.includes('css') || name.includes('jquery') || name.includes('bootstrap')) return 2;
+  if (name.includes('interfaz de usuario') || name.includes('interfaz web') || name.includes('preprocesador') || name.includes('sass') || name.includes('less')) return 3;
+  if (name.includes('javascript básico') || name.includes('variables') || name.includes('funciones') || name.includes('objetos') || name.includes('estructuras')) return 4;
+  if (name.includes('javascript avanzado') || name.includes('es6') || name.includes('dom') || name.includes('api') || name.includes('xhr')) return 5;
+  if (name.includes('vue') && (name.includes('interfaz') || name.includes('componente') || name.includes('formulario') || name.includes('sintaxis'))) return 6;
+  if (name.includes('vue') && (name.includes('avanzado') || name.includes('axios') || name.includes('aplicación'))) return 7;
+  if (name.includes('portafolio') || name.includes('producto digital')) return 8;
+  if (name.includes('empleabilidad') || name.includes('currículum') || name.includes('industria digital')) return 9;
+
+  // Fallback: map by class number (66 total sync classes across 9 modules)
+  const classMatch = name.match(/clase\s*(\d+)/i);
   if (classMatch) {
     const classNum = parseInt(classMatch[1], 10);
     if (classNum <= 3) return 1;
