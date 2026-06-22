@@ -1,2 +1,1 @@
-// Feature: Students — public API
-// Exports will be added as the feature is implemented
+export { getAllStudents, getStudentStatusCounts } from './api/students-api';

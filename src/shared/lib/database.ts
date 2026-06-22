@@ -19,6 +19,7 @@ export class EduTrackDatabase extends Dexie {
   constructor() {
     super('edutrack-ta');
 
+    // v1 — original schema
     this.version(1).stores({
       cohorts: 'id, name, startDate, endDate',
       students:
@@ -30,6 +31,12 @@ export class EduTrackDatabase extends Dexie {
       syllabus: 'id, cohortId, moduleNumber, [cohortId+moduleNumber]',
       notes:
         'id, studentId, type, priority, dueDate, isCompleted, [studentId+type], [studentId+isCompleted]',
+    });
+
+    // v2 — added createdAt index on notes for orderBy('createdAt')
+    this.version(2).stores({
+      notes:
+        'id, studentId, type, priority, dueDate, isCompleted, createdAt, [studentId+type], [studentId+isCompleted]',
     });
   }
 }
