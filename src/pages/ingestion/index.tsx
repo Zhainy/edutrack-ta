@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Upload, HardDrive, Trash2, Play } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { Button } from '@/shared/ui/button';
@@ -6,12 +6,8 @@ import { FileUploadZone } from '@/features/ingestion/ui/file-upload-zone';
 import { FilePreview } from '@/features/ingestion/ui/file-preview';
 import { UploadProgress } from '@/features/ingestion/ui/upload-progress';
 import { UploadHistory } from '@/features/ingestion/ui/upload-history';
-import type { FileType, UploadLog } from '@/features/ingestion/types';
-
-interface SelectedFile {
-  file: File;
-  fileType: FileType;
-}
+import { useIngestion } from '@/features/ingestion/hooks/use-ingestion';
+import type { FileType } from '@/features/ingestion/types';
 
 const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[] }[] = [
   { fileType: 'attendance', acceptedExtensions: ['.csv'] },
@@ -20,103 +16,47 @@ const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[] }[] = [
   { fileType: 'syllabus', acceptedExtensions: ['.csv'] },
 ];
 
-const MOCK_LOGS: UploadLog[] = [
-  {
-    id: 'log-1',
-    cohortId: 'coh-1',
-    fileName: 'asistencia-marzo-2026.csv',
-    fileType: 'attendance',
-    fileSize: 24580,
-    recordsCount: 120,
-    status: 'success',
-    uploadedAt: new Date(Date.now() - 86400000 * 2).toISOString(),
-  },
-  {
-    id: 'log-2',
-    cohortId: 'coh-1',
-    fileName: 'progreso-modulo-2.csv',
-    fileType: 'progress',
-    fileSize: 15320,
-    recordsCount: 85,
-    status: 'success',
-    uploadedAt: new Date(Date.now() - 86400000 * 3).toISOString(),
-  },
-  {
-    id: 'log-3',
-    cohortId: 'coh-1',
-    fileName: 'dedicacion-semanal.xlsx',
-    fileType: 'dedication',
-    fileSize: 44800,
-    recordsCount: 190,
-    status: 'partial',
-    warningCount: 3,
-    errorCount: 2,
-    uploadedAt: new Date(Date.now() - 86400000 * 5).toISOString(),
-  },
-];
-
 export function IngestionPage() {
-  const [selectedFiles, setSelectedFiles] = useState<Record<string, SelectedFile>>({});
-  const [processing, setProcessing] = useState(false);
-  const [uploadStatus, setUploadStatus] = useState<'idle' | 'parsing' | 'validating' | 'saving' | 'success' | 'error'>('idle');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [logs, setLogs] = useState<UploadLog[]>(MOCK_LOGS);
+  const {
+    selectedFiles,
+    status,
+    progress,
+    errors,
+    uploadLogs,
+    fileResults,
+    addFile,
+    removeFile,
+    clearAll,
+    processFiles,
+    resetStatus,
+    clearLogs,
+    loadUploadLogs,
+  } = useIngestion();
+
+  useEffect(() => {
+    void loadUploadLogs();
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   const filesCount = Object.keys(selectedFiles).length;
+  const isProcessing = status === 'parsing' || status === 'validating' || status === 'saving';
 
-  const handleFileSelected = useCallback((fileType: FileType, file: File) => {
-    setSelectedFiles((prev) => ({
-      ...prev,
-      [fileType]: { file, fileType },
-    }));
-  }, []);
-
-  const handleRemove = useCallback((fileType: FileType) => {
-    setSelectedFiles((prev) => {
-      const next = { ...prev };
-      delete next[fileType];
-      return next;
-    });
-  }, []);
-
-  const handleClearAll = useCallback(() => {
-    setSelectedFiles({});
-  }, []);
-
-  const handleProcess = useCallback(async () => {
-    setProcessing(true);
-    setUploadStatus('idle');
-    setUploadProgress(0);
-
-    // Simulate processing — sub-feature 3 will implement real logic
-    setUploadStatus('parsing');
-    await delay(1000);
-    setUploadProgress(30);
-
-    setUploadStatus('validating');
-    await delay(800);
-    setUploadProgress(60);
-
-    setUploadStatus('saving');
-    await delay(1200);
-    setUploadProgress(100);
-
-    const now = new Date().toISOString();
-    const newLogs: UploadLog[] = Object.entries(selectedFiles).map(([ft, sf]) => ({
-      id: `log-${Date.now()}-${ft}`,
-      cohortId: 'coh-1',
-      fileName: sf.file.name,
-      fileType: ft as FileType,
-      fileSize: sf.file.size,
-      recordsCount: 0,
-      status: 'success' as const,
-      uploadedAt: now,
-    }));
-
-    setLogs((prev) => [...newLogs, ...prev]);
-    setUploadStatus('success');
-    setProcessing(false);
+  const processingFileName = useMemo(() => {
+    return Object.values(selectedFiles).map((f) => f.name).join(', ');
   }, [selectedFiles]);
+
+  const handleProcess = async () => {
+    resetStatus();
+    await processFiles();
+  };
+
+  const aggregateStats = useMemo(() => {
+    if (fileResults.length === 0) return undefined;
+    return {
+      totalRows: fileResults.reduce((s, r) => s + r.totalRows, 0),
+      validRows: fileResults.reduce((s, r) => s + r.validRows, 0),
+      invalidRows: fileResults.reduce((s, r) => s + r.invalidRows, 0),
+    };
+  }, [fileResults]);
 
   return (
     <div className="p-6 space-y-8">
@@ -135,10 +75,10 @@ export function IngestionPage() {
             key={fileType}
             fileType={fileType}
             acceptedExtensions={acceptedExtensions}
-            onFileSelected={(file) => handleFileSelected(fileType, file)}
-            onRemove={handleRemove}
-            selectedFile={selectedFiles[fileType]?.file ?? null}
-            disabled={processing}
+            onFileSelected={(file) => addFile(fileType, file)}
+            onRemove={removeFile}
+            selectedFile={selectedFiles[fileType] ?? null}
+            disabled={isProcessing}
           />
         ))}
       </div>
@@ -159,8 +99,8 @@ export function IngestionPage() {
                 variant="ghost"
                 size="sm"
                 leftIcon={<Trash2 size={14} strokeWidth={1.5} />}
-                onClick={handleClearAll}
-                disabled={processing}
+                onClick={clearAll}
+                disabled={isProcessing}
               >
                 Limpiar todo
               </Button>
@@ -169,34 +109,39 @@ export function IngestionPage() {
                 size="sm"
                 leftIcon={<Play size={16} strokeWidth={1.5} />}
                 onClick={handleProcess}
-                isLoading={processing}
+                isLoading={isProcessing}
+                disabled={isProcessing}
               >
-                Procesar Archivos
+                {isProcessing ? 'Procesando...' : 'Procesar Archivos'}
               </Button>
             </div>
           </div>
 
           <div className="space-y-2">
-            {Object.values(selectedFiles).map(({ file, fileType }) => (
+            {Object.entries(selectedFiles).map(([fileType, file]) => (
               <FilePreview
                 key={fileType}
                 file={file}
-                fileType={fileType}
+                fileType={fileType as FileType}
                 status="pending"
-                onRemove={() => handleRemove(fileType)}
+                onRemove={() => removeFile(fileType as FileType)}
               />
             ))}
           </div>
 
           {/* Progress indicator */}
-          <div className="mt-4">
-            <UploadProgress
-              status={uploadStatus}
-              progress={uploadProgress}
-              fileName={Object.values(selectedFiles).map((sf) => sf.file.name).join(', ')}
-              errors={undefined}
-            />
-          </div>
+          {status !== 'idle' && (
+            <div className="mt-4">
+              <UploadProgress
+                status={status === 'parsing' || status === 'validating' || status === 'saving' ? status : status === 'error' ? 'error' : 'success'}
+                progress={progress}
+                fileName={processingFileName}
+                stats={aggregateStats}
+                errors={errors}
+                onRetry={handleProcess}
+              />
+            </div>
+          )}
         </Card>
       )}
 
@@ -209,14 +154,10 @@ export function IngestionPage() {
           </h3>
         </div>
         <UploadHistory
-          logs={logs}
-          onClear={() => setLogs([])}
+          logs={uploadLogs}
+          onClear={clearLogs}
         />
       </Card>
     </div>
   );
-}
-
-function delay(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
 }

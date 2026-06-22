@@ -6,6 +6,7 @@ import type { ProgressRecord } from '@/entities/progress';
 import type { DedicationRecord } from '@/entities/dedication';
 import type { SyllabusModule } from '@/entities/syllabus';
 import type { Note } from '@/entities/note';
+import type { UploadLog } from '@/entities/upload-log';
 
 export class EduTrackDatabase extends Dexie {
   cohorts!: Table<Cohort, string>;
@@ -15,6 +16,7 @@ export class EduTrackDatabase extends Dexie {
   dedication!: Table<DedicationRecord, string>;
   syllabus!: Table<SyllabusModule, string>;
   notes!: Table<Note, string>;
+  uploadLogs!: Table<UploadLog, string>;
 
   constructor() {
     super('edutrack-ta');
@@ -37,6 +39,11 @@ export class EduTrackDatabase extends Dexie {
     this.version(2).stores({
       notes:
         'id, studentId, type, priority, dueDate, isCompleted, createdAt, [studentId+type], [studentId+isCompleted]',
+    });
+
+    // v3 — added uploadLogs table
+    this.version(3).stores({
+      uploadLogs: 'id, cohortId, fileType, status, uploadedAt',
     });
   }
 }
