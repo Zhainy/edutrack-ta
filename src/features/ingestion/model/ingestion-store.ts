@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX } from '../lib';
+import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV } from '../lib';
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
   RawAttendanceSchema,
@@ -133,6 +133,33 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
             ? await parseStudentCSV(file)
             : await parseStudentXLSX(file);
           parseResult = result as unknown as ParseResult<Record<string, string>>;
+        } else if (fileType === 'dedication' && format === 'xlsx') {
+          const result = await parseDedicationXLSX(file);
+          parseResult = {
+            success: result.success,
+            data: result.data as unknown as Record<string, string>[],
+            errors: result.errors,
+            warnings: result.warnings,
+            stats: result.stats,
+          };
+        } else if (fileType === 'syllabus' && format === 'xlsx') {
+          const result = await parseSyllabusXLSX(file);
+          parseResult = {
+            success: result.success,
+            data: result.data as unknown as Record<string, string>[],
+            errors: result.errors,
+            warnings: result.warnings,
+            stats: result.stats,
+          };
+        } else if (fileType === 'progress' && format === 'csv') {
+          const result = await parseProgressCSV(file);
+          parseResult = {
+            success: result.success,
+            data: result.data as unknown as Record<string, string>[],
+            errors: result.errors,
+            warnings: result.warnings,
+            stats: result.stats,
+          };
         } else {
           const mappings = DEFAULT_COLUMN_MAPPINGS[fileType as keyof typeof DEFAULT_COLUMN_MAPPINGS] ?? [];
           parseResult = format === 'csv'

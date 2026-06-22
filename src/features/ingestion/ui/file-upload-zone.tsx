@@ -13,12 +13,12 @@ interface FileUploadZoneProps {
   selectedFile?: File | null;
 }
 
-const FILE_TYPE_CONFIG: Record<FileType, { label: string; icon: typeof FileSpreadsheet; color: string }> = {
-  attendance: { label: 'Asistencia', icon: FileText, color: 'text-sky-400' },
-  progress: { label: 'Progreso', icon: FileSpreadsheet, color: 'text-emerald-400' },
-  dedication: { label: 'Dedicación', icon: Table, color: 'text-amber-400' },
-  syllabus: { label: 'Syllabus', icon: FileText, color: 'text-indigo-400' },
-  students: { label: 'Estudiantes', icon: FileSpreadsheet, color: 'text-cyan-400' },
+const FILE_TYPE_CONFIG: Record<FileType, { label: string; icon: typeof FileSpreadsheet; color: string; hint: string }> = {
+  attendance: { label: 'Asistencia', icon: FileText, color: 'text-sky-400', hint: 'asistencia_alumnos.csv' },
+  progress: { label: 'Progreso', icon: FileSpreadsheet, color: 'text-emerald-400', hint: 'progreso_actividades.csv' },
+  dedication: { label: 'Dedicación', icon: Table, color: 'text-amber-400', hint: 'dedicacion_curso.xlsx' },
+  syllabus: { label: 'Syllabus', icon: FileText, color: 'text-indigo-400', hint: 'cronograma_modulos.xlsx' },
+  students: { label: 'Estudiantes', icon: FileSpreadsheet, color: 'text-cyan-400', hint: 'lista_alumnos.csv' },
 };
 
 function formatFileSize(bytes: number): string {
@@ -199,6 +199,7 @@ export function FileUploadZone({
             Arrastra o haz click para subir
           </p>
           <p className="text-xs text-slate-500 mt-0.5">{extList} — máx. {maxFileSize} MB</p>
+          <p className="text-xs text-slate-600 mt-0.5">Ej: {config.hint}</p>
         </div>
       )}
 

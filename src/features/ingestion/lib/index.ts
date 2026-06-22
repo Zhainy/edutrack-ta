@@ -1,7 +1,7 @@
-export { parseCsv } from './csv-parser';
+export { parseCsv, parseProgressCSV } from './csv-parser';
 export type { CsvParseOptions } from './csv-parser';
 
-export { parseXlsx, getSheetNames } from './xlsx-parser';
+export { parseXlsx, getSheetNames, parseDedicationXLSX, parseSyllabusXLSX } from './xlsx-parser';
 export type { XlsxParseOptions } from './xlsx-parser';
 
 export { parseStudentCSV, parseStudentXLSX } from './student-parser';
