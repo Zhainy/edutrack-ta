@@ -11,6 +11,7 @@ export interface RiskInput {
   dedication: DedicationRecord[];
   syllabus: SyllabusModule[];
   referenceDate: Date;
+  allCohortProgress?: ProgressRecord[];
 }
 
 export interface RiskMetrics {

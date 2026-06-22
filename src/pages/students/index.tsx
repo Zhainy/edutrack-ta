@@ -200,6 +200,7 @@ export function StudentsPage() {
               dedication: allDedication.filter((d) => d.studentId === student.id),
               syllabus: allSyllabus.filter((m) => m.cohortId === student.cohortId),
               referenceDate,
+              allCohortProgress: allProgress,
             });
             const pending = await getPendingActivities(student.id);
             const pendingCount = pending.length;

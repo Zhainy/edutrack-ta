@@ -130,6 +130,7 @@ export function DashboardPage() {
               dedication: allDedication.filter((d) => d.studentId === student.id),
               syllabus: allSyllabus.filter((m) => m.cohortId === student.cohortId),
               referenceDate,
+              allCohortProgress: allProgress,
             });
             return { student, risk };
           });

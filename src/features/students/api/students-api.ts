@@ -94,8 +94,17 @@ export async function getStudentMetrics(
   const absentClasses = totalClasses - presentClasses;
   const attendanceRate = totalClasses > 0 ? (presentClasses / totalClasses) * 100 : 100;
 
+  // Total unique activities from all progress records in the cohort
+  const cohortStudents = await db.students.where('cohortId').equals(student.cohortId).toArray();
+  const cohortStudentIds = new Set(cohortStudents.map(s => s.id));
+  const allCohortProgress = await db.progress
+    .filter(p => cohortStudentIds.has(p.studentId))
+    .toArray();
+  const uniqueActivityNames = new Set(allCohortProgress.map(p => p.activityName));
+  const totalActivities = uniqueActivityNames.size || progress.length;
+
   const completedActivities = progress.filter(p => p.completed).length;
-  const totalActivities = syllabus.reduce((sum, s) => sum + (s.activities?.length || 0), 0);
+
   const activityPercentage = totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 0;
 
   const risk = calculateRisk({
@@ -105,6 +114,7 @@ export async function getStudentMetrics(
     dedication,
     syllabus,
     referenceDate: new Date(),
+    allCohortProgress,
   });
 
   const dates = dedication.map(d => new Date(d.date).getTime());

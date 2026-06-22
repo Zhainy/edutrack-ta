@@ -539,18 +539,15 @@ function ProgresoTab({
     return syllabus.map((mod) => {
       const moduleProgress = progress.filter((p) => p.moduleNumber === mod.moduleNumber);
       const completed = moduleProgress.filter((p) => p.completed).length;
-      const total = mod.activities.length;
+      const total = moduleProgress.length;
       return {
         ...mod,
-        activities: mod.activities.map((name) => {
-          const record = moduleProgress.find((p) => p.activityName === name);
-          return {
-            name,
-            completed: record?.completed ?? false,
-            score: record?.score,
-            completionDate: record?.completionDate,
-          };
-        }),
+        activities: moduleProgress.map((p) => ({
+          name: p.activityName,
+          completed: p.completed,
+          score: p.score,
+          completionDate: p.completionDate,
+        })),
         completed,
         total,
         rate: total > 0 ? Math.round((completed / total) * 100) : 0,
@@ -1267,6 +1264,7 @@ export function StudentDetailPage() {
             dedication: allDedication,
             syllabus: cohortSyllabus,
             referenceDate: new Date(),
+            allCohortProgress: allProgress,
           });
         }
 

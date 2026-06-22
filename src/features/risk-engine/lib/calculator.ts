@@ -6,7 +6,7 @@ import { RISK_THRESHOLDS, FACTOR_WEIGHTS } from '../config/thresholds';
  * Pure deterministic function — same inputs always produce same output.
  */
 export function calculateRisk(input: RiskInput): RiskOutput {
-  const { attendance, progress, dedication, syllabus, referenceDate } = input;
+  const { attendance, progress, dedication, syllabus, referenceDate, allCohortProgress } = input;
 
   const factors: RiskFactor[] = [];
   let totalScore = 0;
@@ -71,7 +71,9 @@ export function calculateRisk(input: RiskInput): RiskOutput {
   }
 
   // ── Step 3: Activity completion ───────────────────────────────────────────
-  const totalActivities = syllabus.reduce((sum, s) => sum + s.activities.length, 0);
+  const progressSource = allCohortProgress ?? progress;
+  const uniqueActivities = new Set(progressSource.map(p => p.activityName));
+  const totalActivities = uniqueActivities.size || 1;
   const completedActivities = progress.filter((p) => p.completed).length;
   const activityCompletion =
     totalActivities > 0 ? (completedActivities / totalActivities) * 100 : 100;

@@ -318,10 +318,9 @@ export async function parseProgressCSV(
                 const status = String(row[i] ?? '').trim();
                 const dateStr = String(row[i + 1] ?? '').trim();
                 const isCompleted = status.includes('Finalizado');
-                if (!isCompleted) continue;
 
                 const completionDate = dateStr ? parseSpanishDate(dateStr) : null;
-                const approved = status.includes('ha alcanzado');
+                const approved = isCompleted && status.includes('ha alcanzado');
 
                 records.push({
                   id: crypto.randomUUID(),
