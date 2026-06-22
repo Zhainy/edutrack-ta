@@ -173,13 +173,13 @@ async function readFileAsTextSafe(file: File): Promise<string> {
   // Check for UTF-16LE BOM (FF FE)
   if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
     const decoded = new TextDecoder('utf-16le').decode(buffer);
-    return decoded.replace(/^\uFEFF/, '');
+    return decoded.replace(/^\uFEFF/, '').replace(/\0/g, '');
   }
 
   // Check for UTF-16BE BOM (FE FF) — rare but handle it
   if (bytes[0] === 0xFE && bytes[1] === 0xFF) {
     const decoded = new TextDecoder('utf-16be').decode(buffer);
-    return decoded.replace(/^\uFEFF/, '');
+    return decoded.replace(/^\uFEFF/, '').replace(/\0/g, '');
   }
 
   // Check for UTF-8 BOM (EF BB BF)
@@ -199,7 +199,7 @@ async function readFileAsTextSafe(file: File): Promise<string> {
   }
   if (totalChecked > 0 && nullCount > totalChecked * 0.25) {
     const decoded = new TextDecoder('utf-16le').decode(buffer);
-    return decoded.replace(/^\uFEFF/, '');
+    return decoded.replace(/^\uFEFF/, '').replace(/\0/g, '');
   }
 
   return new TextDecoder('utf-8').decode(buffer);

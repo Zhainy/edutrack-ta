@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+import { toast } from 'sonner';
 import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX, parseDedicationXLSX, parseSyllabusXLSX, parseProgressCSV } from '../lib';
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
@@ -318,6 +319,14 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
 
         if (fileStatus === 'failed') anyFailed = true;
 
+        if (fileStatus === 'success') {
+          toast.success(`${file.name} procesado — ${savedCount} registros`);
+        } else if (fileStatus === 'partial') {
+          toast.warning(`${file.name} procesado con ${invalidRows} errores`);
+        } else if (fileStatus === 'failed') {
+          toast.error(`${file.name} falló`, fileErrors[0]?.message);
+        }
+
         console.log(`[ingestion-store] ${fileType}: ${savedCount} saved, ${invalidRows} errors`);
 
         // Log to upload_logs
@@ -339,6 +348,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Error desconocido';
         console.error(`[ingestion-store] Error processing ${fileType}:`, message);
+        toast.error(`${file.name} falló`, message);
         fileResults.push({
           fileType,
           fileName: file.name,
