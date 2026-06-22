@@ -32,6 +32,7 @@ export function FileUploadZone({
   acceptedExtensions,
   maxFileSize = 10,
   onFileSelected,
+  onRemove,
   disabled = false,
   selectedFile,
 }: FileUploadZoneProps) {

@@ -91,7 +91,7 @@ export async function parseCsv({
           },
         });
       },
-      error: (err) => {
+      error: (err: { message: string }) => {
         console.error(`[csv-parser] Error fatal: ${err.message}`);
         resolve({
           success: false,

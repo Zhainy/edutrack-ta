@@ -35,6 +35,14 @@ export const DEFAULT_COLUMN_MAPPINGS: Record<FileType, ColumnMapping[]> = {
     { sourceColumn: 'expectedHours', targetField: 'expectedHours', required: true },
     { sourceColumn: 'activities', targetField: 'activities', required: false },
   ],
+  students: [
+    { sourceColumn: 'fullName', targetField: 'fullName', required: true },
+    { sourceColumn: 'email', targetField: 'email', required: true },
+    { sourceColumn: 'externalId', targetField: 'externalId', required: true },
+    { sourceColumn: 'enrollmentDate', targetField: 'enrollmentDate', required: true },
+    { sourceColumn: 'status', targetField: 'status', required: false },
+    { sourceColumn: 'tags', targetField: 'tags', required: false },
+  ],
 };
 
 /**

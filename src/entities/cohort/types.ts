@@ -1,9 +1,14 @@
 export interface Cohort {
   id: string;
+  code: string;
   name: string;
+  startDate: string;
+  endDate: string;
+  totalHours: number;
+  region?: string;
+  schedule?: string;
+  instructor?: string;
   description?: string;
-  startDate: string; // ISO 8601: YYYY-MM-DD
-  endDate: string;   // ISO 8601: YYYY-MM-DD
   syllabusUrl?: string;
   createdAt: string;
   updatedAt: string;

@@ -258,7 +258,7 @@ export function normalizeProgress(
   const errors: ValidationError[] = [];
 
   const completionDate = raw.completionDate
-    ? normalizeDate(raw.completionDate)
+    ? (normalizeDate(raw.completionDate) ?? undefined)
     : undefined;
 
   if (raw.completionDate && !completionDate) {

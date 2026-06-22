@@ -1,15 +1,19 @@
 import type { Cohort } from '@/entities/cohort';
 
-export const COHORT_ID = 'cohort-2026-a';
+export const COHORT_ID = 'cohort-1';
 
 export const mockCohorts: Cohort[] = [
   {
     id: COHORT_ID,
-    name: 'Cohorte 2026-A',
-    description: 'Cohorte de programación web - primer semestre 2026',
-    startDate: '2026-03-01',
-    endDate: '2026-08-31',
-    createdAt: '2026-03-01T00:00:00.000Z',
-    updatedAt: '2026-03-01T00:00:00.000Z',
+    code: 'RTD-24-01-06-0021-4',
+    name: 'DESARROLLO DE APLICACIONES FRONT-END TRAINEE V2.0',
+    startDate: '2026-05-14',
+    endDate: '2026-08-18',
+    totalHours: 438,
+    region: "O'Higgins",
+    schedule: '19:00 A 23:00 HRS',
+    instructor: 'Juan Pablo Duran',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
   },
 ];

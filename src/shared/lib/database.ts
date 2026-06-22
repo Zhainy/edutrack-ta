@@ -45,6 +45,11 @@ export class EduTrackDatabase extends Dexie {
     this.version(3).stores({
       uploadLogs: 'id, cohortId, fileType, status, uploadedAt',
     });
+
+    // v4 — add code indexes on cohorts
+    this.version(4).stores({
+      cohorts: 'id, code, name, startDate, endDate, [code+startDate]',
+    });
   }
 }
 

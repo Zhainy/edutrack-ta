@@ -164,10 +164,10 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
         };
 
         const bulkUpsertMap: Partial<Record<FileType, (data: unknown[]) => Promise<number>>> = {
-          attendance: bulkUpsertAttendance,
-          progress: bulkUpsertProgress,
-          dedication: bulkUpsertDedication,
-          syllabus: bulkUpsertSyllabus,
+          attendance: bulkUpsertAttendance as (data: unknown[]) => Promise<number>,
+          progress: bulkUpsertProgress as (data: unknown[]) => Promise<number>,
+          dedication: bulkUpsertDedication as (data: unknown[]) => Promise<number>,
+          syllabus: bulkUpsertSyllabus as (data: unknown[]) => Promise<number>,
         };
 
         const schema = schemaMap[fileType];
