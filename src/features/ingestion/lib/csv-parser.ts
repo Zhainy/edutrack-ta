@@ -164,102 +164,158 @@ function extractModuleNumber(activityName: string): number | null {
   return null;
 }
 
+// ── UTF-16LE detection + decoding ─────────────────────────────────────────
+
+async function readFileAsTextSafe(file: File): Promise<string> {
+  const buffer = await file.arrayBuffer();
+  const bytes = new Uint8Array(buffer);
+  // Check for UTF-16LE BOM (FF FE)
+  if (bytes[0] === 0xFF && bytes[1] === 0xFE) {
+    return new TextDecoder('utf-16le').decode(buffer);
+  }
+  // Fallback: try UTF-16LE with null bytes between ASCII chars
+  const sample = bytes.slice(0, Math.min(200, bytes.length));
+  let nullCount = 0;
+  for (let i = 1; i < sample.length; i += 2) {
+    if (sample[i] === 0x00) nullCount++;
+  }
+  if (nullCount > sample.length * 0.25) {
+    return new TextDecoder('utf-16le').decode(buffer);
+  }
+  return new TextDecoder('utf-8').decode(buffer);
+}
+
+function normalizeHeaderName(name: string): string {
+  return name.replace(/["]/g, '').replace(/\0/g, '').trim();
+}
+
 export async function parseProgressCSV(
   file: File
 ): Promise<ParseResult<ProgressRecord>> {
   console.log(`[csv-parser] Parsing progress CSV: ${file.name}`);
 
-  const text = await file.text();
+  try {
+    const text = await readFileAsTextSafe(file);
 
-  return new Promise((resolve) => {
-    Papa.parse(text, {
-      header: true,
-      skipEmptyLines: false,
-      complete: (results) => {
-        const errors: ValidationError[] = [];
-        const records: ProgressRecord[] = [];
-        const warnings: string[] = [];
-        const headers = results.meta.fields ?? [];
-        const dataRows = results.data as Record<string, unknown>[];
-        const totalRows = dataRows.length;
-        let validRows = 0;
-        let invalidRows = 0;
+    return new Promise((resolve) => {
+      Papa.parse(text, {
+        header: false,
+        skipEmptyLines: true,
+        complete: (results) => {
+          const errors: ValidationError[] = [];
+          const records: ProgressRecord[] = [];
+          const warnings: string[] = [];
+          const allRows = results.data as string[][];
+          const totalRows = allRows.length;
 
-        const emailCol = headers[0];
-        const activityColumns = headers.slice(1);
+          if (allRows.length < 2) {
+            resolve({
+              success: false,
+              data: [],
+              errors: [{ row: 0, column: 'CSV', message: 'El archivo no tiene suficientes filas', value: undefined }],
+              warnings: [],
+              stats: { totalRows: 0, validRows: 0, invalidRows: 1 },
+            });
+            return;
+          }
 
-        dataRows.forEach((row, index) => {
-          const rowIndex = index + 2;
+          // Header row: col 0 = (empty / student name placeholder), col 1 = "Dirección de correo", col 2+ = activity status/date pairs
+          const rawHeaders = allRows[0];
+          const activityHeaders: string[] = [];
 
-          try {
-            const email = String(row[emailCol] ?? '').trim();
-            if (!email) {
+          for (let i = 0; i < rawHeaders.length; i++) {
+            const h = normalizeHeaderName(rawHeaders[i] ?? '');
+            activityHeaders.push(h);
+          }
+
+          const dataRows = allRows.slice(1);
+          let validRows = 0;
+          let invalidRows = 0;
+
+          for (let rowIdx = 0; rowIdx < dataRows.length; rowIdx++) {
+            const row = dataRows[rowIdx];
+            const rowIndex = rowIdx + 2;
+
+            try {
+              if (!row || row.length < 2) continue;
+
+              const email = String(row[1] ?? '').trim();
+
+              if (!email) {
+                errors.push({
+                  row: rowIndex,
+                  column: 'Dirección de correo',
+                  message: 'Email es requerido',
+                  value: email,
+                });
+                invalidRows++;
+                continue;
+              }
+
+              // Process activity pairs starting at col 2
+              for (let i = 2; i < row.length - 1; i += 2) {
+                const statusColumn = activityHeaders[i];
+                const status = String(row[i] ?? '').trim();
+                const dateStr = String(row[i + 1] ?? '').trim();
+                const isCompleted = status.includes('Finalizado');
+                if (!isCompleted) continue;
+
+                const completionDate = dateStr ? parseSpanishDate(dateStr) : null;
+                const approved = status.includes('ha alcanzado');
+
+                records.push({
+                  id: crypto.randomUUID(),
+                  studentId: '',
+                  studentEmail: email,
+                  activityName: statusColumn || `Actividad #${Math.floor(i / 2)}`,
+                  moduleNumber: extractModuleNumber(statusColumn || '') ?? undefined,
+                  completed: isCompleted,
+                  completionDate: completionDate ?? undefined,
+                  score: approved ? 100 : undefined,
+                  status,
+                  uploadedAt: new Date().toISOString(),
+                });
+              }
+
+              validRows++;
+            } catch (error) {
               errors.push({
                 row: rowIndex,
-                column: emailCol,
-                message: 'Email es requerido',
-                value: row[emailCol],
+                column: 'General',
+                message: `Error procesando fila: ${error instanceof Error ? error.message : 'Error desconocido'}`,
+                value: row,
               });
               invalidRows++;
-              return;
             }
-
-            for (let i = 0; i < activityColumns.length; i += 2) {
-              const statusColumn = activityColumns[i];
-              const dateColumn = activityColumns[i + 1];
-              if (!statusColumn) continue;
-
-              const status = String(row[statusColumn] ?? '').trim();
-              const dateStr = String(row[dateColumn] ?? '').trim();
-              const isCompleted = status.includes('Finalizado');
-              if (!isCompleted) continue;
-
-              const completionDate = dateStr ? parseSpanishDate(dateStr) : null;
-              const approved = status.includes('ha alcanzado');
-
-              records.push({
-                id: crypto.randomUUID(),
-                studentId: '',
-                studentEmail: email,
-                activityName: statusColumn,
-                moduleNumber: extractModuleNumber(statusColumn) ?? undefined,
-                completed: isCompleted,
-                completionDate: completionDate ?? undefined,
-                score: approved ? 100 : null as unknown as undefined,
-                status,
-                uploadedAt: new Date().toISOString(),
-              });
-            }
-
-            validRows++;
-          } catch (error) {
-            errors.push({
-              row: rowIndex,
-              column: 'General',
-              message: `Error procesando fila: ${error instanceof Error ? error.message : 'Error desconocido'}`,
-              value: row,
-            });
-            invalidRows++;
           }
-        });
 
-        resolve({
-          success: invalidRows === 0,
-          data: records,
-          errors,
-          warnings,
-          stats: { totalRows, validRows, invalidRows },
-        });
-      },
-      error: (err: { message: string }) => {
-        resolve({
-          success: false,
-          data: [],
-          errors: [{ row: 0, column: 'CSV', message: `Error parseando CSV: ${err.message}`, value: null }],
-          warnings: [],
-          stats: { totalRows: 0, validRows: 0, invalidRows: 0 },
-        });
-      },
+          resolve({
+            success: invalidRows === 0,
+            data: records,
+            errors,
+            warnings,
+            stats: { totalRows, validRows, invalidRows },
+          });
+        },
+        error: (err: { message: string }) => {
+          resolve({
+            success: false,
+            data: [],
+            errors: [{ row: 0, column: 'CSV', message: `Error parseando CSV: ${err.message}`, value: null }],
+            warnings: [],
+            stats: { totalRows: 0, validRows: 0, invalidRows: 0 },
+          });
+        },
+      });
     });
-  });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'Error desconocido';
+    return {
+      success: false,
+      data: [],
+      errors: [{ row: 0, column: 'general', message: `Error al leer archivo: ${message}`, value: undefined }],
+      warnings: [],
+      stats: { totalRows: 0, validRows: 0, invalidRows: 1 },
+    };
+  }
 }

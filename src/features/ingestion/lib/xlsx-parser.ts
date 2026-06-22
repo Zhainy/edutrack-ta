@@ -162,7 +162,8 @@ export async function parseDedicationXLSX(
     const records: DedicationRecord[] = [];
     const warnings: string[] = [];
 
-    if (rawData.length < 9) {
+    // Real structure: row 0 = metadata, row 1 = empty, row 2 = headers, row 3+ = data
+    if (rawData.length < 4) {
       return {
         success: false,
         data: [],
@@ -172,14 +173,14 @@ export async function parseDedicationXLSX(
       };
     }
 
-    const dataRows = rawData.slice(8);
+    const dataRows = rawData.slice(3);
     let validRows = 0;
     let invalidRows = 0;
     const today = new Date().toISOString().split('T')[0];
 
     for (let i = 0; i < dataRows.length; i++) {
       const row = dataRows[i];
-      const rowIndex = i + 9;
+      const rowIndex = i + 4;
 
       try {
         if (!row || row.length === 0 || !row[0]) continue;
@@ -248,167 +249,4 @@ export async function parseDedicationXLSX(
   }
 }
 
-// ── SENCE Syllabus (Cronograma) parser ───────────────────────────────────
-// Format: metadata rows, then module table:
-// Módulo N° | Nombre del Módulo | Aprendizajes Esperados | Día | Horas Sincrónicas | Horas Asincrónicas | Fecha | Horario
-
-interface ModuleRow {
-  moduleNumber: string;
-  moduleName: string;
-  dayNumber: string;
-  syncHours: number;
-  asyncHours: number;
-  date: string;
-  schedule: string;
-}
-
-interface ParsedSyllabusModule {
-  moduleNumber: number;
-  moduleName: string;
-  startDate: string;
-  endDate: string;
-  expectedHours: number;
-  activities: string[];
-}
-
-export async function parseSyllabusXLSX(
-  file: File
-): Promise<ParseResult<ParsedSyllabusModule>> {
-  console.log(`[xlsx-parser] Parsing syllabus XLSX: ${file.name}`);
-
-  try {
-    const buffer = await file.arrayBuffer();
-    const workbook = XLSX.read(buffer, { type: 'array', codepage: 65001 });
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-    if (!sheet) {
-      return {
-        success: false,
-        data: [],
-        errors: [{ row: 0, column: 'general', message: 'Hoja no encontrada', value: undefined }],
-        warnings: [],
-        stats: { totalRows: 0, validRows: 0, invalidRows: 1 },
-      };
-    }
-
-    const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
-    const errors: ValidationError[] = [];
-    const warnings: string[] = [];
-    const moduleRows: ModuleRow[] = [];
-    let currentModule: string | null = null;
-
-    for (let r = 0; r < data.length; r++) {
-      const row = data[r];
-      if (!row || row.length < 2) continue;
-
-      const colA = String(row[0] ?? '').trim();
-      const colB = String(row[1] ?? '').trim();
-
-      const moduleMatch = colA.match(/M[oó]dulo\s*N[°º]\s*(\d+)/i);
-      if (moduleMatch) {
-        currentModule = moduleMatch[1];
-        const moduleName = colB;
-        const syncHours = parseFloat(String(row[4] ?? '0').replace(',', '.'));
-        const asyncHours = parseFloat(String(row[5] ?? '0').replace(',', '.'));
-        const date = String(row[6] ?? '').trim();
-        const schedule = String(row[7] ?? '').trim();
-        const dayNumber = String(row[3] ?? '').trim();
-
-        if (moduleName) {
-          moduleRows.push({
-            moduleNumber: currentModule,
-            moduleName,
-            dayNumber,
-            syncHours: isNaN(syncHours) ? 0 : syncHours,
-            asyncHours: isNaN(asyncHours) ? 0 : asyncHours,
-            date,
-            schedule,
-          });
-        }
-      } else if (currentModule && colA && /^\d+$/.test(colA.replace(/\s/g, ''))) {
-        // Sub-row of same module (day continuation)
-        const syncHours = parseFloat(String(row[4] ?? '0').replace(',', '.'));
-        const asyncHours = parseFloat(String(row[5] ?? '0').replace(',', '.'));
-        const date = String(row[6] ?? '').trim();
-        const schedule = String(row[7] ?? '').trim();
-        const dayNumber = String(row[3] ?? '').trim();
-
-        moduleRows.push({
-          moduleNumber: currentModule,
-          moduleName: '',
-          dayNumber,
-          syncHours: isNaN(syncHours) ? 0 : syncHours,
-          asyncHours: isNaN(asyncHours) ? 0 : asyncHours,
-          date,
-          schedule,
-        });
-      }
-    }
-
-    // Group rows by module number
-    const modulesByNumber = new Map<string, ModuleRow[]>();
-    for (const mr of moduleRows) {
-      const existing = modulesByNumber.get(mr.moduleNumber) ?? [];
-      existing.push(mr);
-      modulesByNumber.set(mr.moduleNumber, existing);
-    }
-
-    const resultModules: ParsedSyllabusModule[] = [];
-    for (const [modNum, modRows] of modulesByNumber) {
-      const name = modRows.find((r) => r.moduleName)?.moduleName ?? `Módulo ${modNum}`;
-      const dates = modRows.map((r) => r.date).filter(Boolean);
-      const totalSync = modRows.reduce((s, r) => s + r.syncHours, 0);
-      const totalAsync = modRows.reduce((s, r) => s + r.asyncHours, 0);
-      const totalHours = Math.round((totalSync + totalAsync) * 100) / 100;
-
-      resultModules.push({
-        moduleNumber: parseInt(modNum, 10),
-        moduleName: name,
-        startDate: dates[0] ?? '',
-        endDate: dates[dates.length - 1] ?? '',
-        expectedHours: totalHours,
-        activities: modRows.map((r) => {
-          const parts: string[] = [];
-          if (r.dayNumber) parts.push(`Día ${r.dayNumber}`);
-          if (r.schedule) parts.push(r.schedule);
-          if (r.date) parts.push(r.date);
-          if (r.syncHours > 0) parts.push(`${r.syncHours}h sinc.`);
-          if (r.asyncHours > 0) parts.push(`${r.asyncHours}h asinc.`);
-          return parts.join(' — ');
-        }),
-      });
-    }
-
-    resultModules.sort((a, b) => a.moduleNumber - b.moduleNumber);
-
-    if (resultModules.length === 0) {
-      errors.push({
-        row: 0,
-        column: 'general',
-        message: 'No se encontraron módulos en el archivo',
-        value: undefined,
-      });
-    }
-
-    return {
-      success: errors.length === 0,
-      data: resultModules,
-      errors,
-      warnings,
-      stats: {
-        totalRows: resultModules.length,
-        validRows: resultModules.length,
-        invalidRows: 0,
-      },
-    };
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'Error al leer XLSX';
-    return {
-      success: false,
-      data: [],
-      errors: [{ row: 0, column: 'general', message: `Error al leer archivo: ${message}`, value: undefined }],
-      warnings: [],
-      stats: { totalRows: 0, validRows: 0, invalidRows: 1 },
-    };
-  }
-}
+// ── Syllabus parser moved to syllabus-parser.ts ───────────────────────────

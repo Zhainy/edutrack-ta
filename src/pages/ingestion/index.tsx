@@ -14,11 +14,12 @@ import { normalizeStudentFromImport } from '@/features/ingestion/lib/normalizer'
 import { toast } from 'sonner';
 import type { FileType } from '@/features/ingestion/types';
 
-const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[] }[] = [
-  { fileType: 'attendance', acceptedExtensions: ['.csv'] },
-  { fileType: 'progress', acceptedExtensions: ['.csv'] },
-  { fileType: 'dedication', acceptedExtensions: ['.xlsx', '.xls'] },
-  { fileType: 'syllabus', acceptedExtensions: ['.csv'] },
+const ZONE_CONFIG: { fileType: FileType; acceptedExtensions: string[]; description: string }[] = [
+  { fileType: 'attendance', acceptedExtensions: ['.csv', '.xlsx'], description: 'CSV/XLSX con fechas y estados de asistencia' },
+  { fileType: 'progress', acceptedExtensions: ['.csv'], description: 'CSV de SENCE (progress.*.csv) con actividades' },
+  { fileType: 'dedication', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX de SENCE (dedication.*.xlsx) con minutos' },
+  { fileType: 'syllabus', acceptedExtensions: ['.xlsx', '.xls'], description: 'XLSX del cronograma del curso (CRONOGRAMA*.xlsx)' },
+  { fileType: 'students', acceptedExtensions: ['.csv', '.xlsx', '.xls'], description: 'CSV/XLSX con lista de estudiantes' },
 ];
 
 interface ManualStudent {
@@ -194,16 +195,18 @@ export function IngestionPage() {
 
       {/* Upload zones grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        {ZONE_CONFIG.map(({ fileType, acceptedExtensions }) => (
-          <FileUploadZone
-            key={fileType}
-            fileType={fileType}
-            acceptedExtensions={acceptedExtensions}
-            onFileSelected={(file) => addFile(fileType, file)}
-            onRemove={removeFile}
-            selectedFile={selectedFiles[fileType] ?? null}
-            disabled={isProcessing}
-          />
+        {ZONE_CONFIG.map(({ fileType, acceptedExtensions, description }) => (
+          <div key={fileType} className="flex flex-col gap-1">
+            <FileUploadZone
+              fileType={fileType}
+              acceptedExtensions={acceptedExtensions}
+              onFileSelected={(file) => addFile(fileType, file)}
+              onRemove={removeFile}
+              selectedFile={selectedFiles[fileType] ?? null}
+              disabled={isProcessing}
+            />
+            <p className="text-xs text-slate-500 px-1">{description}</p>
+          </div>
         ))}
       </div>
 

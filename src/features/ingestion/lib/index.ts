@@ -1,13 +1,15 @@
 export { parseCsv, parseProgressCSV } from './csv-parser';
 export type { CsvParseOptions } from './csv-parser';
 
-export { parseXlsx, getSheetNames, parseDedicationXLSX, parseSyllabusXLSX } from './xlsx-parser';
+export { parseXlsx, getSheetNames, parseDedicationXLSX } from './xlsx-parser';
 export type { XlsxParseOptions } from './xlsx-parser';
+
+export { parseSyllabusXLSX } from './syllabus-parser';
 
 export { parseStudentCSV, parseStudentXLSX } from './student-parser';
 export type { RawStudentImport } from './student-parser';
 
-export { detectFileType } from './detect-file-type';
+export { detectFileType, detectContentType } from './detect-file-type';
 
 export {
   normalizeDate,

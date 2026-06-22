@@ -3,12 +3,9 @@ import { detectFileType, parseCsv, parseXlsx, parseStudentCSV, parseStudentXLSX,
 import { DEFAULT_COLUMN_MAPPINGS } from '../config/column-mappings';
 import {
   RawAttendanceSchema,
-  RawProgressSchema,
-  RawDedicationSchema,
-  RawSyllabusSchema,
   RawStudentImportSchema,
 } from '@/shared/lib/validators';
-import { normalizeAttendance, normalizeProgress, normalizeDedication, normalizeSyllabus, normalizeStudentFromImport } from '../lib/normalizer';
+import { normalizeAttendance, normalizeStudentFromImport } from '../lib/normalizer';
 import {
   bulkUpsertAttendance,
   bulkUpsertProgress,
@@ -183,31 +180,13 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           continue;
         }
 
-        // 3. Validate + normalize per file type
+        // 3. SENCE parsers (dedication, progress, syllabus) return typed entities directly
+        //    Skip Zod/normalize pipeline and go straight to bulkUpsert.
+        //    Other types (attendance, students) go through full validation pipeline.
+        const SENCE_TYPES: FileType[] = ['dedication', 'progress', 'syllabus'];
+
         set({ status: 'validating' });
         const rawRows = parseResult.data;
-
-        const schemaMap: Partial<Record<FileType, import('zod').ZodSchema>> = {
-          attendance: RawAttendanceSchema,
-          progress: RawProgressSchema,
-          dedication: RawDedicationSchema,
-          syllabus: RawSyllabusSchema,
-          students: RawStudentImportSchema,
-        };
-
-        const normalizerMap: Partial<Record<FileType, (input: Record<string, unknown>) => { data: unknown[]; errors: ValidationError[] }>> = {
-          attendance: (input) => normalizeAttendance(input as never),
-          progress: (input) => normalizeProgress(input as never),
-          dedication: (input) => normalizeDedication(input as never),
-          syllabus: (input) => normalizeSyllabus(input as never),
-          students: (input) => {
-            const raw = input.raw as Record<string, string>;
-            const cohortId = input.cohortId as string;
-            const result = normalizeStudentFromImport(raw as never, cohortId);
-            return { data: result.data as unknown[], errors: result.errors };
-          },
-        };
-
         const bulkUpsertMap: Partial<Record<FileType, (data: unknown[]) => Promise<number>>> = {
           attendance: bulkUpsertAttendance as (data: unknown[]) => Promise<number>,
           progress: bulkUpsertProgress as (data: unknown[]) => Promise<number>,
@@ -219,11 +198,8 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           }) as (data: unknown[]) => Promise<number>,
         };
 
-        const schema = schemaMap[fileType];
-        const normalizer = normalizerMap[fileType];
         const bulkUpsert = bulkUpsertMap[fileType];
-
-        if (!schema || !normalizer || !bulkUpsert) {
+        if (!bulkUpsert) {
           fileResults.push({
             fileType,
             fileName: file.name,
@@ -238,48 +214,85 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           continue;
         }
 
-        // Validate each raw row with Zod
-        const validRawRows: Record<string, string>[] = [];
+        let savedCount = 0;
         const fileErrors: ValidationError[] = [];
 
-        for (let r = 0; r < rawRows.length; r++) {
-          const result = schema.safeParse(rawRows[r]);
-          if (result.success) {
-            validRawRows.push(result.data as unknown as Record<string, string>);
-          } else {
-            for (const issue of result.error.issues) {
-              fileErrors.push({
-                row: r + 2,
-                column: issue.path.join('.'),
-                message: issue.message,
-                value: issue.path.length > 0 ? rawRows[r][issue.path[0] as string] : undefined,
-              });
+        if (SENCE_TYPES.includes(fileType)) {
+          // SENCE parsers already return validated entities → save directly
+          set({ status: 'saving' });
+          const items = rawRows as unknown[];
+          savedCount = items.length > 0 ? await bulkUpsert(items) : 0;
+        } else {
+          // Generic pipeline: Zod validate → normalize → save
+          const schemaMap: Partial<Record<FileType, import('zod').ZodSchema>> = {
+            attendance: RawAttendanceSchema,
+            students: RawStudentImportSchema,
+          };
+
+          const normalizerMap: Partial<Record<FileType, (input: Record<string, unknown>) => { data: unknown[]; errors: ValidationError[] }>> = {
+            attendance: (input) => normalizeAttendance(input as never),
+            students: (input) => {
+              const raw = input.raw as Record<string, string>;
+              const cohortId = input.cohortId as string;
+              const result = normalizeStudentFromImport(raw as never, cohortId);
+              return { data: result.data as unknown[], errors: result.errors };
+            },
+          };
+
+          const schema = schemaMap[fileType];
+          const normalizer = normalizerMap[fileType];
+
+          if (!schema || !normalizer) {
+            fileResults.push({
+              fileType,
+              fileName: file.name,
+              totalRows: rawRows.length,
+              validRows: 0,
+              invalidRows: rawRows.length,
+              savedCount: 0,
+              status: 'failed',
+              errorMessage: `Tipo de archivo no soportado: ${fileType}`,
+            });
+            anyFailed = true;
+            continue;
+          }
+
+          const validRawRows: Record<string, string>[] = [];
+          for (let r = 0; r < rawRows.length; r++) {
+            const result = schema.safeParse(rawRows[r]);
+            if (result.success) {
+              validRawRows.push(result.data as unknown as Record<string, string>);
+            } else {
+              for (const issue of result.error.issues) {
+                fileErrors.push({
+                  row: r + 2,
+                  column: issue.path.join('.'),
+                  message: issue.message,
+                  value: issue.path.length > 0 ? rawRows[r][issue.path[0] as string] : undefined,
+                });
+              }
             }
           }
+
+          set({ status: 'saving' });
+          const normalizedItems: unknown[] = [];
+          const normalizeErrors: ValidationError[] = [];
+
+          for (let r = 0; r < validRawRows.length; r++) {
+            const needsCohortId = fileType === 'students';
+            const input = needsCohortId
+              ? { raw: validRawRows[r], index: r + 2, cohortId }
+              : { raw: validRawRows[r], index: r + 2 };
+            const normResult = normalizer(input);
+            normalizedItems.push(...normResult.data);
+            normalizeErrors.push(...normResult.errors);
+          }
+
+          fileErrors.push(...normalizeErrors);
+          savedCount = normalizedItems.length > 0 ? await bulkUpsert(normalizedItems) : 0;
         }
 
-        // Normalize
-        set({ status: 'saving' });
-        const normalizedItems: unknown[] = [];
-        const normalizeErrors: ValidationError[] = [];
-
-        for (let r = 0; r < validRawRows.length; r++) {
-          const needsCohortId = fileType === 'syllabus' || fileType === 'students';
-          const input = needsCohortId
-            ? { raw: validRawRows[r], index: r + 2, cohortId }
-            : { raw: validRawRows[r], index: r + 2 };
-          const normResult = normalizer(input);
-          normalizedItems.push(...normResult.data);
-          normalizeErrors.push(...normResult.errors);
-        }
-
-        const allFileErrors = [...fileErrors, ...normalizeErrors];
-        allErrors.push(...allFileErrors);
-
-        // Save to IndexedDB
-        const savedCount = normalizedItems.length > 0 ? await bulkUpsert(normalizedItems) : 0;
-
-        const invalidRows = allFileErrors.length;
+        const invalidRows = fileErrors.length;
         const fileStatus: 'success' | 'partial' | 'failed' =
           savedCount > 0 && invalidRows === 0
             ? 'success'
@@ -313,7 +326,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
           status: fileStatus,
           warningCount: fileStatus === 'partial' ? invalidRows : undefined,
           errorCount: fileStatus === 'failed' ? invalidRows : undefined,
-          errorMessage: fileStatus === 'failed' ? allFileErrors[0]?.message : undefined,
+          errorMessage: fileStatus === 'failed' ? fileErrors[0]?.message : undefined,
           uploadedAt: now,
         };
         await addUploadLog(uploadLog);
