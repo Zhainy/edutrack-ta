@@ -7,6 +7,7 @@ import {
   MessageSquare,
   Settings,
   GraduationCap,
+  Calendar,
   X,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -26,6 +27,7 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.DASHBOARD, label: 'Dashboard', icon: LayoutDashboard },
   { path: ROUTES.STUDENTS, label: 'Estudiantes', icon: Users },
+  { path: ROUTES.ATTENDANCE, label: 'Asistencia', icon: Calendar },
   { path: ROUTES.INGESTION, label: 'Carga de Datos', icon: Upload },
   { path: ROUTES.ANALYTICS, label: 'Analítica', icon: BarChart3 },
   { path: ROUTES.CRM, label: 'CRM', icon: MessageSquare },

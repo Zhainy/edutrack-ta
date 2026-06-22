@@ -17,6 +17,7 @@ export const ROUTES = {
   DASHBOARD: '/',
   STUDENTS: '/students',
   STUDENT_DETAIL: (id: string) => `/students/${id}`,
+  ATTENDANCE: '/attendance',
   INGESTION: '/ingestion',
   ANALYTICS: '/analytics',
   CRM: '/crm',

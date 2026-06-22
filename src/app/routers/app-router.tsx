@@ -3,6 +3,7 @@ import { MainLayout } from '@/widgets/layout/main-layout';
 import { DashboardPage } from '@/pages/dashboard';
 import { StudentsPage } from '@/pages/students';
 import { StudentDetailPage } from '@/pages/students/[id]';
+import { AttendancePage } from '@/pages/attendance';
 import { IngestionPage } from '@/pages/ingestion';
 import { AnalyticsPage } from '@/pages/analytics';
 import { CrmPage } from '@/pages/crm';
@@ -16,6 +17,7 @@ export function AppRouter() {
         <Route path="/dashboard" element={<DashboardPage />} />
         <Route path="/students" element={<StudentsPage />} />
         <Route path="/students/:id" element={<StudentDetailPage />} />
+        <Route path="/attendance" element={<AttendancePage />} />
         <Route path="/ingestion" element={<IngestionPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/crm" element={<CrmPage />} />

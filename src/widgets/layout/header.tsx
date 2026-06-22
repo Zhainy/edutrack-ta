@@ -7,6 +7,7 @@ import { useStudentsStore } from '@/features/students';
 const ROUTE_LABELS: Record<string, string> = {
   '/dashboard': 'Dashboard',
   '/students': 'Estudiantes',
+  '/attendance': 'Asistencia',
   '/ingestion': 'Carga de Datos',
   '/analytics': 'Analítica',
   '/crm': 'CRM',
