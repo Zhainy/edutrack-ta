@@ -1,0 +1,13 @@
+{
+  "name": "on-spec-change-validate",
+  "version": "1.0.0",
+  "description": "Valida que los cambios en archivos de spec no rompan dependencias entre features",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [".kiro/specs/*.md"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se modificó un archivo de spec. Revisa las secciones 'Dependencies' de todos los specs en .kiro/specs/ y verifica que: (1) no haya referencias rotas entre specs, (2) el spec modificado sigue siendo consistente con los specs que dependen de él o de los que él depende. Reporta cualquier inconsistencia encontrada."
+  }
+}

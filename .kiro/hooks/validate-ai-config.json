@@ -1,0 +1,13 @@
+{
+  "name": "validate-ai-config",
+  "version": "1.0.0",
+  "description": "Valida que la configuración de IA sea consistente: si VITE_ENABLE_AI=true, VITE_GROQ_API_KEY debe estar configurada",
+  "when": {
+    "type": "fileEdited",
+    "patterns": [".env", ".env.local", ".env.example"]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "node scripts/validate-ai-config.js"
+  }
+}

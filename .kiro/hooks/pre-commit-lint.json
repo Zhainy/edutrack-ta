@@ -1,0 +1,13 @@
+{
+  "name": "pre-commit-lint",
+  "version": "1.0.0",
+  "description": "Ejecuta ESLint y TypeScript check antes de commits para mantener calidad de código",
+  "when": {
+    "type": "preToolUse",
+    "toolTypes": ["shell"]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "npm run lint && npx tsc --noEmit"
+  }
+}

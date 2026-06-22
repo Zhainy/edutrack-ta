@@ -1,0 +1,13 @@
+{
+  "name": "on-file-create-template",
+  "version": "1.0.0",
+  "description": "Al crear un nuevo archivo dentro de src/features/, genera automáticamente el boilerplate FSD correspondiente (model/ui/api/lib) según el tipo de archivo",
+  "when": {
+    "type": "fileCreated",
+    "patterns": ["src/features/**/*.ts", "src/features/**/*.tsx"]
+  },
+  "then": {
+    "type": "askAgent",
+    "prompt": "Se creó un nuevo archivo en src/features/. Analiza la ruta del archivo creado y genera el boilerplate apropiado según Feature-Sliced Design:\n- Si es un archivo en model/: genera el Zustand store con tipos y acciones básicas\n- Si es un archivo en ui/: genera el componente React con TypeScript, props tipadas, y estructura estándar (imports, types, componente, export)\n- Si es un archivo en api/: genera las funciones de acceso a Dexie.js con tipos de retorno\n- Si es un archivo en lib/: genera la función pura con JSDoc y tipos\nUsa TypeScript strict mode, NO uses 'any', sigue las convenciones de nombres del proyecto (PascalCase para componentes, camelCase para hooks/utils)."
+  }
+}

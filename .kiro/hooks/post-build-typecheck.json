@@ -1,0 +1,13 @@
+{
+  "name": "post-build-typecheck",
+  "version": "1.0.0",
+  "description": "Ejecuta tsc --noEmit después de cada build para detectar errores de tipos que Vite puede omitir",
+  "when": {
+    "type": "postToolUse",
+    "toolTypes": ["shell"]
+  },
+  "then": {
+    "type": "runCommand",
+    "command": "npx tsc --noEmit --pretty 2>&1 | head -50"
+  }
+}
