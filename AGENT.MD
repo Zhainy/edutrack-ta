@@ -1,14 +1,15 @@
-# AGENT.MD - EduTrack TA v2.1.0
+
+# AGENT.MD - EduTrack TA v2.2.0
 
 ## 📋 Metadata
 - **Proyecto:** EduTrack TA (Teacher Assistant Tracking System)
-- **Versión:** 2.1.0
+- **Versión:** 2.2.0
 - **Fecha:** 2026-06-23
 - **Stack:** React 18 + TypeScript + Tailwind + Dexie (IndexedDB) + Zustand
 - **Arquitectura:** Feature-Sliced Design (FSD)
 - **Costo:** $0 (capa gratuita, sin tarjeta de crédito)
 - **IA:** Opcional (Groq free tier, sin fallback)
-- **Notificaciones:** Solo in-app (Sonner toasts)
+- **Notificaciones:** Solo in-app (Sonner toasts + campana con notas pendientes)
 - **Cohorte activa:** RTD-24-01-06-0021-4 (DESARROLLO DE APLICACIONES FRONT-END TRAINEE V2.0)
 - **Estudiantes:** 27 (25 activos, 2 desertores, 2 reemplazos)
 - **Duración:** 14/5/2026 - 18/8/2026 (438 horas, 9 módulos, 66 clases)
@@ -20,8 +21,9 @@ Herramienta para Teacher Assistants de SENCE que:
 - Carga datos reales de plataforma SENCE (dedication, progress, cronograma, asistencia)
 - Calcula riesgo de deserción/reprobación en tiempo real
 - Permite seguimiento CRM (notas, alertas, comentarios de asistencia)
-- Visualiza métricas por cohorte/curso
+- Visualiza métricas por cohorte/curso con analítica avanzada
 - Registra asistencia de forma interactiva (editor con click)
+- Muestra evaluaciones de módulo con promedio y colores
 
 ---
 
@@ -119,11 +121,11 @@ Archivo → detectContentType() → Parser específico →
 
 ## 📊 Estado Actual del Proyecto
 
-### ✅ Completamente Funcional
+### ✅ Completamente Funcional (90% del MVP)
 - Scaffolding completo (~120 archivos)
 - Dashboard con KPIs y gráficos reales
 - Tabla de estudiantes con filtros, búsqueda, orden alfabético A-Z
-- Vista de detalle con 6 tabs (Resumen, Asistencia, Progreso, Dedicación, Pendientes, Notas)
+- Vista de detalle con **7 tabs** (Resumen, Asistencia, Progreso, Dedicación, Pendientes, Notas, **Evaluaciones**)
 - Motor de riesgo (calculateRisk) con datos reales
 - Ingestión completa de 5 tipos de archivos SENCE
 - Matching automático entre archivos
@@ -143,13 +145,31 @@ Archivo → detectContentType() → Parser específico →
   - Selector de mes y leyenda de colores
   - Stats como promedios por alumno (no conteo total)
   - Filtra solo días hasta hoy (no muestra días futuros)
+- **Tab "Evaluaciones":**
+  - Muestra notas de módulo (M1-M8) con colores
+  - Verde: ≥6, Amarillo: 5-5.9, Rojo: <5, Gris: PENDIENTE
+  - KPIs: Promedio general, Módulos evaluados, Estado
+  - Fechas de envío de notas
+- **Analítica avanzada:**
+  - 6 KPIs de cohorte (Total, Activos, Desertores, Asistencia, Horas, Riesgo)
+  - Gráfico de distribución de riesgo (donut)
+  - Gráfico de evolución de asistencia semanal (línea con meta 80%)
+  - Tabla de Top Performers (5 mejores)
+  - Tabla de Estudiantes en Riesgo (5 con mayor riesgo)
+- **Campana de notificaciones:**
+  - Muestra notas pendientes/urgentes del CRM
+  - Badge con contador
+  - Click abre lista de notas
+  - Link a detalle del estudiante
 
-### ⚠️ Pendiente de Implementar
-1. **Tab "Evaluaciones"** en detalle del estudiante para mostrar notas de módulo
-2. **Analítica avanzada** (gráficos de cohorte, comparativas entre estudiantes)
-3. **Configuración** (umbrales de riesgo editables, gestión de cohortes)
-4. **Exportar reportes** (CSV/PDF de asistencia, progreso, riesgo)
-5. **Eliminar estudiantes** (botón trash con confirmación)
+### ⚠️ Pendiente de Implementar (10%)
+1. **Página de Configuración** (/settings)
+   - Perfil del TA (localStorage)
+   - Gestión de cohortes
+   - Umbrales de riesgo editables
+   - Preferencias
+2. **Exportar reportes** (CSV/PDF de asistencia, progreso, riesgo)
+3. **Eliminar estudiantes** (botón trash con confirmación)
 
 ### ✅ Bugs Resueltos
 - Encoding UTF-16LE en progress
@@ -161,6 +181,8 @@ Archivo → detectContentType() → Parser específico →
 - Keys duplicadas en ProgresoTab corregidas
 - CohortId mismatch entre syllabus y students
 - Timezone UTC → local (fechas correctas en Chile)
+- Active students count incluye status 'replacement'
+- Risk score display format (X/100)
 
 ---
 
@@ -172,10 +194,10 @@ src/
 ├── pages/ (dashboard, students, ingestion, analytics, crm, attendance, settings)
 ├── widgets/ (layout: sidebar, header, main-layout)
 ├── features/
-│   ├── students/ (CRUD, tabla, detalle, status-selector, matcher)
+│   ├── students/ (CRUD, tabla, detalle, status-selector, matcher, evaluaciones-tab)
 │   ├── ingestion/ (parsers SENCE, upload, store, validate-ai-config)
 │   ├── risk-engine/ (calculateRisk, thresholds)
-│   ├── analytics/ (gráficos, KPIs)
+│   ├── analytics/ (gráficos, KPIs, cohort-kpis, risk-distribution, weekly-attendance, student-comparison)
 │   ├── crm/ (notas, seguimiento, note-card, note-form, note-timeline)
 │   ├── attendance/ (grid visual, generate-dates, attendance-api, edit-modal)
 │   └── ai-assistant/ (OPCIONAL, Groq)
@@ -210,6 +232,16 @@ npm run build        # Production build
 
 ## 📝 Historial
 
+### v2.2.0 (2026-06-23)
+- Tab "Evaluaciones" en detalle del estudiante con notas de módulo
+- Analítica avanzada con 6 KPIs y gráficos
+- Gráfico de distribución de riesgo (donut)
+- Gráfico de evolución de asistencia semanal
+- Tablas de Top Performers y Estudiantes en Riesgo
+- Campana de notificaciones conectada con CRM
+- Fix active students count (incluye 'replacement')
+- Fix risk score display format (X/100)
+
 ### v2.1.0 (2026-06-23)
 - Editor interactivo de asistencia (click para ciclar estados)
 - Fix timezone local (fechas correctas en Chile UTC-3/-4)
@@ -238,3 +270,5 @@ npm run build        # Production build
 
 ### v1.0.0 (2026-06-22)
 - Scaffolding inicial
+
+---
