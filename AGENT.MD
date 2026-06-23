@@ -184,6 +184,44 @@ Archivo → detectContentType() → Parser específico →
 - Active students count incluye status 'replacement'
 - Risk score display format (X/100)
 
+### ⚙️ Página de Configuración — Implementada (2026-06-22)
+
+#### Archivos creados
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/features/settings/model/settings-store.ts` | Store Zustand para umbrales de riesgo y preferencias (localStorage) |
+| `src/features/settings/model/profile-store.ts` | Store Zustand persist para perfil del TA (nombre, email, rol, institución) |
+| `src/features/settings/api/settings-api.ts` | CRUD de cohortes contra Dexie (getAll, upsert, delete con limpieza en cascada) |
+| `src/features/settings/ui/profile-tab.tsx` | Formulario de perfil (nombre, email, rol select, institución) |
+| `src/features/settings/ui/cohorts-tab.tsx` | CRUD completo de cohortes con modales de crear/editar/eliminar |
+| `src/features/settings/ui/risk-tab.tsx` | Configuración de umbrales de riesgo editables con restablecer |
+| `src/features/settings/ui/preferences-tab.tsx` | Selector de formato de fecha e idioma (auto-save) |
+| `src/features/settings/ui/about-tab.tsx` | Versión, stack, créditos (Nicole Fernández con enlaces) |
+| `src/features/settings/index.ts` | Barrel exports |
+| `src/pages/settings/index.tsx` | Página con 5 tabs via Radix UI |
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/shared/config/constants.ts` | `APP_VERSION` actualizado de `1.1.0` a `2.2.0` |
+| `src/features/settings/model/profile-store.ts` | Eliminado campo `otec`, simplificado a solo `institution` |
+
+#### Estado de los tabs
+
+| Tab | Estado | Persistencia |
+|-----|--------|-------------|
+| Perfil | ✅ Funcional | localStorage (zustand persist) |
+| Cohortes | ✅ Funcional | IndexedDB (Dexie) |
+| Riesgo | ✅ Funcional | localStorage |
+| Preferencias | ✅ Funcional | localStorage (auto-save) |
+| Acerca de | ✅ Funcional | Info estática |
+
+#### Pendientes (próximos pasos)
+1. **Exportar reportes** (CSV/PDF) — asistencia, progreso, riesgo
+2. **Eliminar estudiantes** — botón trash con confirmación desde tabla/detalle
+
 ---
 
 ## 🏗️ Estructura de Carpetas (FSD)
@@ -200,6 +238,7 @@ src/
 │   ├── analytics/ (gráficos, KPIs, cohort-kpis, risk-distribution, weekly-attendance, student-comparison)
 │   ├── crm/ (notas, seguimiento, note-card, note-form, note-timeline)
 │   ├── attendance/ (grid visual, generate-dates, attendance-api, edit-modal)
+│   ├── settings/ (profile, cohorts-crud, risk-thresholds, preferences, about)
 │   └── ai-assistant/ (OPCIONAL, Groq)
 ├── entities/ (student, attendance, progress, dedication, syllabus, note, cohort, upload-log, module-grade)
 └── shared/ (ui, lib, hooks, config, mocks, date)
@@ -231,6 +270,16 @@ npm run build        # Production build
 ---
 
 ## 📝 Historial
+
+### v2.3.0 (2026-06-22)
+- Página de Configuración (/settings) con 5 tabs
+- Tab Perfil: formulario del TA con persistencia localStorage
+- Tab Cohortes: CRUD completo con modales y limpieza en cascada
+- Tab Riesgo: umbrales editables (horas, asistencia, actividades, inactividad, score)
+- Tab Preferencias: formato de fecha e idioma (auto-save)
+- Tab Acerca de: versión, stack, créditos con enlaces (Nicole Fernández)
+- Nuevo store profile-store con zustand persist
+- APP_VERSION actualizado a 2.2.0 en constants.ts
 
 ### v2.2.0 (2026-06-23)
 - Tab "Evaluaciones" en detalle del estudiante con notas de módulo
