@@ -1,7 +1,7 @@
 /** Application-wide constants */
 
 export const APP_NAME = 'EduTrack TA';
-export const APP_VERSION = '1.1.0';
+export const APP_VERSION = '2.2.0';
 
 /** IndexedDB database name */
 export const DB_NAME = 'edutrack-ta';
