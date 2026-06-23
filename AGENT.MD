@@ -121,8 +121,8 @@ Archivo → detectContentType() → Parser específico →
 
 ## 📊 Estado Actual del Proyecto
 
-### ✅ Completamente Funcional (90% del MVP)
-- Scaffolding completo (~120 archivos)
+### ✅ Completamente Funcional (95% del MVP)
+- Scaffolding completo (~130 archivos)
 - Dashboard con KPIs y gráficos reales
 - Tabla de estudiantes con filtros, búsqueda, orden alfabético A-Z
 - Vista de detalle con **7 tabs** (Resumen, Asistencia, Progreso, Dedicación, Pendientes, Notas, **Evaluaciones**)
@@ -161,15 +161,14 @@ Archivo → detectContentType() → Parser específico →
   - Badge con contador
   - Click abre lista de notas
   - Link a detalle del estudiante
+- **Página de Configuración** (/settings) con 5 tabs:
+  - Perfil del TA (localStorage), Cohortes (CRUD + IndexedDB)
+  - Umbrales de riesgo editables, Preferencias, Acerca de
+- **Exportación de reportes** (CSV/PDF de asistencia, progreso, riesgo)
 
-### ⚠️ Pendiente de Implementar (10%)
-1. **Página de Configuración** (/settings)
-   - Perfil del TA (localStorage)
-   - Gestión de cohortes
-   - Umbrales de riesgo editables
-   - Preferencias
-2. **Exportar reportes** (CSV/PDF de asistencia, progreso, riesgo)
-3. **Eliminar estudiantes** (botón trash con confirmación)
+### ⚠️ Pendiente de Implementar (5%)
+1. **Eliminar estudiantes** (botón trash con confirmación)
+2. **Mejoras de UX** (virtualización de tablas grandes, filtros avanzados)
 
 ### ✅ Bugs Resueltos
 - Encoding UTF-16LE en progress
@@ -183,6 +182,92 @@ Archivo → detectContentType() → Parser específico →
 - Timezone UTC → local (fechas correctas en Chile)
 - Active students count incluye status 'replacement'
 - Risk score display format (X/100)
+
+### ⚙️ Página de Configuración — Implementada (2026-06-22)
+
+#### Archivos creados
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/features/settings/model/settings-store.ts` | Store Zustand para umbrales de riesgo y preferencias (localStorage) |
+| `src/features/settings/model/profile-store.ts` | Store Zustand persist para perfil del TA (nombre, email, rol, institución) |
+| `src/features/settings/api/settings-api.ts` | CRUD de cohortes contra Dexie (getAll, upsert, delete con limpieza en cascada) |
+| `src/features/settings/ui/profile-tab.tsx` | Formulario de perfil (nombre, email, rol select, institución) |
+| `src/features/settings/ui/cohorts-tab.tsx` | CRUD completo de cohortes con modales de crear/editar/eliminar |
+| `src/features/settings/ui/risk-tab.tsx` | Configuración de umbrales de riesgo editables con restablecer |
+| `src/features/settings/ui/preferences-tab.tsx` | Selector de formato de fecha e idioma (auto-save) |
+| `src/features/settings/ui/about-tab.tsx` | Versión, stack, créditos (Nicole Fernández con enlaces) |
+| `src/features/settings/index.ts` | Barrel exports |
+| `src/pages/settings/index.tsx` | Página con 5 tabs via Radix UI |
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/shared/config/constants.ts` | `APP_VERSION` actualizado de `1.1.0` a `2.2.0` |
+| `src/features/settings/model/profile-store.ts` | Eliminado campo `otec`, simplificado a solo `institution` |
+
+#### Estado de los tabs
+
+| Tab | Estado | Persistencia |
+|-----|--------|-------------|
+| Perfil | ✅ Funcional | localStorage (zustand persist) |
+| Cohortes | ✅ Funcional | IndexedDB (Dexie) |
+| Riesgo | ✅ Funcional | localStorage |
+| Preferencias | ✅ Funcional | localStorage (auto-save) |
+| Acerca de | ✅ Funcional | Info estática |
+
+#### Pendientes (próximos pasos)
+1. **Eliminar estudiantes** — botón trash con confirmación desde tabla/detalle
+2. **Mejoras de UX** — virtualización de tablas grandes, filtros avanzados
+
+### 📤 Exportación de Reportes — Implementada (2026-06-23)
+
+#### Archivos creados
+
+| Archivo | Propósito |
+|---------|-----------|
+| `src/features/export/lib/csv.ts` | Generación de CSV con BOM UTF-8 + descarga via Blob |
+| `src/features/export/lib/print.ts` | Genera HTML formateado + window.print() para PDF |
+| `src/features/export/api/export-api.ts` | 3 funciones de datos (asistencia, progreso, riesgo) para CSV y PDF |
+| `src/features/export/ui/export-button.tsx` | Dropdown con Radix DropdownMenu con 6 opciones |
+| `src/features/export/index.ts` | Barrel export |
+
+#### Archivos modificados
+
+| Archivo | Cambio |
+|---------|--------|
+| `src/widgets/layout/header.tsx` | Botón "Exportar" insertado antes de las notificaciones |
+
+#### Ubicación en UI
+
+El botón **"Exportar"** está en el **header**, antes del icono de notificaciones (campana). Es un dropdown con 6 opciones organizadas por tipo de reporte y formato.
+
+#### Tipos de reportes disponibles
+
+| Reporte | CSV | PDF |
+|---------|-----|-----|
+| Asistencia | ✅ | ✅ |
+| Progreso | ✅ | ✅ |
+| Riesgo | ✅ | ✅ |
+
+#### Contenido de cada reporte
+
+**Asistencia:**
+- Nombre, RUT, Email, Estado
+- Total clases, Presentes, Ausentes, Tardanzas, Justificados
+- % Asistencia
+
+**Progreso:**
+- Nombre, Email
+- Actividades completadas, Actividades totales
+- % Progreso, Última actividad
+
+**Riesgo:**
+- Nombre, RUT, Email, Estado
+- % Asistencia, % Horas, % Progreso
+- Score de riesgo, Nivel (Bajo/Medio/Alto)
+- Factores de riesgo (top 3)
 
 ---
 
@@ -200,6 +285,8 @@ src/
 │   ├── analytics/ (gráficos, KPIs, cohort-kpis, risk-distribution, weekly-attendance, student-comparison)
 │   ├── crm/ (notas, seguimiento, note-card, note-form, note-timeline)
 │   ├── attendance/ (grid visual, generate-dates, attendance-api, edit-modal)
+│   ├── settings/ (profile, cohorts-crud, risk-thresholds, preferences, about)
+│   ├── export/ (csv/pdf reports, print, download)
 │   └── ai-assistant/ (OPCIONAL, Groq)
 ├── entities/ (student, attendance, progress, dedication, syllabus, note, cohort, upload-log, module-grade)
 └── shared/ (ui, lib, hooks, config, mocks, date)
@@ -231,6 +318,24 @@ npm run build        # Production build
 ---
 
 ## 📝 Historial
+
+### v2.4.0 (2026-06-23)
+- Exportación de reportes CSV/PDF
+- Botón "Exportar" en header con dropdown de 6 opciones
+- Reportes de asistencia, progreso y riesgo
+- CSV con BOM UTF-8 para compatibilidad con Excel
+- PDF via ventana de impresión del navegador
+- Radix DropdownMenu para opciones de exportación
+
+### v2.3.0 (2026-06-22)
+- Página de Configuración (/settings) con 5 tabs
+- Tab Perfil: formulario del TA con persistencia localStorage
+- Tab Cohortes: CRUD completo con modales y limpieza en cascada
+- Tab Riesgo: umbrales editables (horas, asistencia, actividades, inactividad, score)
+- Tab Preferencias: formato de fecha e idioma (auto-save)
+- Tab Acerca de: versión, stack, créditos con enlaces (Nicole Fernández)
+- Nuevo store profile-store con zustand persist
+- APP_VERSION actualizado a 2.2.0 en constants.ts
 
 ### v2.2.0 (2026-06-23)
 - Tab "Evaluaciones" en detalle del estudiante con notas de módulo
