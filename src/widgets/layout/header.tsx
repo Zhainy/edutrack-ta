@@ -11,6 +11,7 @@ const ROUTE_LABELS: Record<string, string> = {
   '/ingestion': 'Carga de Datos',
   '/analytics': 'Analítica',
   '/crm': 'CRM',
+  '/ai-insights': 'AI Insights',
   '/settings': 'Configuración',
 };
 

@@ -8,6 +8,7 @@ import {
   Settings,
   GraduationCap,
   Calendar,
+  Brain,
   X,
 } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
@@ -31,6 +32,7 @@ const NAV_ITEMS: NavItem[] = [
   { path: ROUTES.INGESTION, label: 'Carga de Datos', icon: Upload },
   { path: ROUTES.ANALYTICS, label: 'Analítica', icon: BarChart3 },
   { path: ROUTES.CRM, label: 'CRM', icon: MessageSquare },
+  { path: ROUTES.AI_INSIGHTS, label: 'AI Insights', icon: Brain },
   { path: ROUTES.SETTINGS, label: 'Configuración', icon: Settings },
 ];
 

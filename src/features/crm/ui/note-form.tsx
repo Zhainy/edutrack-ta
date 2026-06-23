@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Input } from '@/shared/ui/input';
 import { Select } from '@/shared/ui/select';
 import { Button } from '@/shared/ui/button';
+import { AiNoteFormatButton } from '@/features/ai-assistant/ui/ai-note-format-button';
 import type { Note } from '@/entities/note';
 import type { Student } from '@/entities/student';
 
@@ -88,6 +89,10 @@ export function NoteForm({ students, initialNote, preselectedStudentId, onSave, 
           placeholder="Descripción detallada..."
           value={content}
           onChange={(e) => setContent(e.target.value)}
+        />
+        <AiNoteFormatButton
+          content={content}
+          onApplyFormatted={(formatted) => setContent(formatted)}
         />
       </div>
       <div className="flex flex-col gap-1.5">

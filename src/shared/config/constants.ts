@@ -22,6 +22,7 @@ export const ROUTES = {
   ANALYTICS: '/analytics',
   CRM: '/crm',
   SETTINGS: '/settings',
+  AI_INSIGHTS: '/ai-insights',
 } as const;
 
 /** Risk level thresholds (kept in sync with risk-engine/config/thresholds.ts) */

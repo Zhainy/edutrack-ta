@@ -8,6 +8,7 @@ import { IngestionPage } from '@/pages/ingestion';
 import { AnalyticsPage } from '@/pages/analytics';
 import { CrmPage } from '@/pages/crm';
 import { SettingsPage } from '@/pages/settings';
+import { AiInsightsPage } from '@/pages/ai-insights';
 
 export function AppRouter() {
   return (
@@ -22,6 +23,7 @@ export function AppRouter() {
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/crm" element={<CrmPage />} />
         <Route path="/settings" element={<SettingsPage />} />
+        <Route path="/ai-insights" element={<AiInsightsPage />} />
       </Route>
     </Routes>
   );

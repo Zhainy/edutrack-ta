@@ -51,6 +51,8 @@ import { NoteForm } from '@/features/crm/ui/note-form';
 import { createNote, updateNote, deleteNote, toggleComplete } from '@/features/crm/api/crm-api';
 import { StatusSelector } from '@/features/students/ui/status-selector';
 import { EvaluacionesTab } from '@/features/students/ui/evaluaciones-tab';
+import { AiRecommendations } from '@/features/ai-assistant/ui/ai-recommendations';
+import { isAIAvailable } from '@/shared/config/feature-flags';
 import type { Student } from '@/entities/student';
 import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
@@ -151,7 +153,7 @@ function RiskGauge({ score }: { score: number }) {
   );
 }
 
-function ResumenTab({ risk }: { risk: RiskOutput | null }) {
+function ResumenTab({ risk, studentName }: { risk: RiskOutput | null; studentName: string }) {
   if (!risk) {
     return (
       <EmptyState
@@ -281,6 +283,11 @@ function ResumenTab({ risk }: { risk: RiskOutput | null }) {
             ))}
           </ul>
         </Card>
+      )}
+
+      {/* AI Recommendations */}
+      {isAIAvailable() && (
+        <AiRecommendations studentName={studentName} risk={risk} />
       )}
     </div>
   );
@@ -1272,7 +1279,7 @@ export function StudentDetailPage() {
         {/* Tab content */}
         <div className="flex-1 min-w-0">
           <Tabs.Content value="resumen" className="animate-fade-in">
-            <ResumenTab risk={risk} />
+            <ResumenTab risk={risk} studentName={student.fullName} />
           </Tabs.Content>
           <Tabs.Content value="asistencia" className="animate-fade-in">
             <AsistenciaTab studentId={student.id} />
