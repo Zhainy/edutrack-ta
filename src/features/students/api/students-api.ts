@@ -84,13 +84,35 @@ export async function updateStudentStatus(
 }
 
 export async function deleteStudent(id: string): Promise<void> {
-  await db.transaction('rw', [db.students, db.attendance, db.progress, db.dedication, db.notes], async () => {
-    await db.students.delete(id);
-    await db.attendance.where('studentId').equals(id).delete();
-    await db.progress.where('studentId').equals(id).delete();
-    await db.dedication.where('studentId').equals(id).delete();
-    await db.notes.where('studentId').equals(id).delete();
-  });
+  await db.transaction(
+    'rw',
+    [db.students, db.attendance, db.progress, db.dedication, db.notes, db.moduleGrades],
+    async () => {
+      await db.students.delete(id);
+      await db.attendance.where('studentId').equals(id).delete();
+      await db.progress.where('studentId').equals(id).delete();
+      await db.dedication.where('studentId').equals(id).delete();
+      await db.notes.where('studentId').equals(id).delete();
+      await db.moduleGrades.where('studentId').equals(id).delete();
+    }
+  );
+}
+
+export async function bulkDeleteStudents(ids: string[]): Promise<void> {
+  await db.transaction(
+    'rw',
+    [db.students, db.attendance, db.progress, db.dedication, db.notes, db.moduleGrades],
+    async () => {
+      for (const id of ids) {
+        await db.students.delete(id);
+        await db.attendance.where('studentId').equals(id).delete();
+        await db.progress.where('studentId').equals(id).delete();
+        await db.dedication.where('studentId').equals(id).delete();
+        await db.notes.where('studentId').equals(id).delete();
+        await db.moduleGrades.where('studentId').equals(id).delete();
+      }
+    }
+  );
 }
 
 export async function getStudentMetrics(

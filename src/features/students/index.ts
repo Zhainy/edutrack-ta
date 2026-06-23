@@ -6,6 +6,7 @@ export {
   getCohortById,
   bulkImportStudents,
   deleteStudent,
+  bulkDeleteStudents,
   updateStudent,
   updateStudentStatus,
   getStudentMetrics,

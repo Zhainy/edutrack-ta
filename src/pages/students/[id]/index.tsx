@@ -45,12 +45,14 @@ import { cn } from '@/shared/lib/utils';
 import { formatDate, toISODate } from '@/shared/lib/date';
 import { db } from '@/shared/lib/database';
 import { calculateRisk } from '@/features/risk-engine';
+import { deleteStudent } from '@/features/students';
 import { getPendingActivities } from '@/features/students/lib/pending-activities';
 import { NoteTimeline } from '@/features/crm/ui/note-timeline';
 import { NoteForm } from '@/features/crm/ui/note-form';
 import { createNote, updateNote, deleteNote, toggleComplete } from '@/features/crm/api/crm-api';
 import { StatusSelector } from '@/features/students/ui/status-selector';
 import { EvaluacionesTab } from '@/features/students/ui/evaluaciones-tab';
+import { DeleteStudentModal } from '@/features/students/ui/delete-student-modal';
 import type { Student } from '@/entities/student';
 import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
@@ -986,6 +988,8 @@ export function StudentDetailPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<TabValue>('resumen');
+  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Edit/Create student modal
   const [showEditModal, setShowEditModal] = useState(false);
@@ -1091,9 +1095,16 @@ export function StudentDetailPage() {
 
   const handleDelete = async () => {
     if (!student) return;
-    await db.students.delete(student.id);
-    toast.success('Estudiante eliminado');
-    navigate('/students');
+    setIsDeleting(true);
+    try {
+      await deleteStudent(student.id);
+      toast.success('Estudiante eliminado');
+      navigate('/students');
+    } catch (err) {
+      toast.error('Error al eliminar', err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsDeleting(false);
+    }
   };
 
   // ── Error state ──────────────────────────────────────────────────────
@@ -1201,7 +1212,7 @@ export function StudentDetailPage() {
             <Button variant="secondary" size="sm" leftIcon={<Edit3 size={16} strokeWidth={1.5} />} onClick={openEditModal}>
               Editar
             </Button>
-            <Button variant="danger" size="sm" leftIcon={<Trash2 size={16} strokeWidth={1.5} />} onClick={handleDelete}>
+            <Button variant="danger" size="sm" leftIcon={<Trash2 size={16} strokeWidth={1.5} />} onClick={() => setShowDeleteModal(true)}>
               Eliminar
             </Button>
           </div>
@@ -1343,6 +1354,17 @@ export function StudentDetailPage() {
           />
         </form>
       </Modal>
+
+      {/* Delete confirmation */}
+      {student && (
+        <DeleteStudentModal
+          open={showDeleteModal}
+          onOpenChange={setShowDeleteModal}
+          studentName={student.fullName}
+          onConfirm={handleDelete}
+          isLoading={isDeleting}
+        />
+      )}
     </div>
   );
 }
