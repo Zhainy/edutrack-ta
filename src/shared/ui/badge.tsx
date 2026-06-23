@@ -1,7 +1,7 @@
 import { type HTMLAttributes } from 'react';
 import { cn } from '@/shared/lib/utils';
 
-type BadgeStatus = 'active' | 'dropout' | 'inactive' | 'risk-low' | 'risk-medium' | 'risk-high';
+type BadgeStatus = 'active' | 'dropout' | 'inactive' | 'replacement' | 'risk-low' | 'risk-medium' | 'risk-high';
 type BadgeVariant = BadgeStatus | 'default' | 'info';
 
 export interface BadgeProps extends HTMLAttributes<HTMLSpanElement> {
@@ -13,6 +13,7 @@ const statusStyles: Record<BadgeVariant, string> = {
   active: 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   dropout: 'bg-rose-500/20 text-rose-300 border-rose-500/30',
   inactive: 'bg-slate-500/20 text-slate-300 border-slate-500/30',
+  replacement: 'bg-sky-400/20 text-sky-300 border-sky-400/30',
   'risk-low': 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30',
   'risk-medium': 'bg-amber-400/20 text-amber-300 border-amber-400/30',
   'risk-high': 'bg-rose-500/20 text-rose-300 border-rose-500/30',
@@ -24,6 +25,7 @@ const statusLabels: Partial<Record<BadgeStatus, string>> = {
   active: 'Activo',
   dropout: 'Desertor',
   inactive: 'Inactivo',
+  replacement: 'Reemplazo',
   'risk-low': 'Riesgo Bajo',
   'risk-medium': 'Riesgo Medio',
   'risk-high': 'Riesgo Alto',

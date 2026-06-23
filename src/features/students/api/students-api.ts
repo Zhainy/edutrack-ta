@@ -1,6 +1,6 @@
 import { db } from '@/shared/lib/database';
 import { calculateRisk } from '@/features/risk-engine';
-import type { Student } from '@/entities/student';
+import type { Student, StudentStatus } from '@/entities/student';
 import type { Cohort } from '@/entities/cohort';
 import type { RiskOutput } from '@/features/risk-engine';
 
@@ -40,6 +40,7 @@ export async function getStudentStatusCounts(
   active: number;
   dropout: number;
   inactive: number;
+  replacement: number;
   total: number;
 }> {
   const students = cohortId
@@ -49,6 +50,7 @@ export async function getStudentStatusCounts(
     active: students.filter((s) => s.status === 'active').length,
     dropout: students.filter((s) => s.status === 'dropout').length,
     inactive: students.filter((s) => s.status === 'inactive').length,
+    replacement: students.filter((s) => s.status === 'replacement').length,
     total: students.length,
   };
 }
@@ -59,6 +61,25 @@ export async function getCohorts(): Promise<Cohort[]> {
 
 export async function getCohortById(id: string): Promise<Cohort | undefined> {
   return db.cohorts.get(id);
+}
+
+export async function updateStudent(
+  studentId: string,
+  updates: Partial<Student>
+): Promise<void> {
+  const student = await db.students.get(studentId);
+  if (!student) throw new Error('Student not found');
+  await db.students.update(studentId, {
+    ...updates,
+    updatedAt: new Date().toISOString(),
+  });
+}
+
+export async function updateStudentStatus(
+  studentId: string,
+  status: StudentStatus
+): Promise<void> {
+  await updateStudent(studentId, { status });
 }
 
 export async function deleteStudent(id: string): Promise<void> {

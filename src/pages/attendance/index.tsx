@@ -1,33 +1,59 @@
-import { useEffect, useState } from 'react';
-import { Calendar, BarChart3, List } from 'lucide-react';
+import { useEffect, useMemo, useState, useCallback } from 'react';
+import { Calendar, MessageSquare } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
-import { useAttendanceStore, AttendanceTaker } from '@/features/attendance';
+import { Skeleton } from '@/shared/ui/skeleton';
+import { useAttendanceStore } from '@/features/attendance';
+import { generateAllClassDates, getMonthName, parseLocalDate } from '@/features/attendance/lib/generate-dates';
+import { upsertAttendanceRecord, deleteAttendanceRecord } from '@/features/attendance/api/attendance-api';
+import { AttendanceCommentModal } from '@/features/attendance/ui/attendance-comment-modal';
 import { db } from '@/shared/lib/database';
+import { toast } from '@/shared/ui/toast';
+import type { Student } from '@/entities/student';
 import type { AttendanceRecord } from '@/entities/attendance';
 
-type Tab = 'register' | 'report' | 'history';
+type AttendanceStatus = AttendanceRecord['status'] | null;
 
-interface StudentStats {
-  studentId: string;
-  fullName: string;
-  totalDays: number;
-  presentDays: number;
-  attendanceRate: number;
+interface CellData {
+  status: AttendanceStatus;
+  notes?: string;
+  recordId?: string;
 }
+
+const STATUS_CYCLE: AttendanceStatus[] = [null, 'present', 'absent', 'late', 'excused'];
+
+function nextCycleStatus(current: AttendanceStatus): AttendanceStatus {
+  const idx = STATUS_CYCLE.indexOf(current);
+  return STATUS_CYCLE[(idx + 1) % STATUS_CYCLE.length];
+}
+
+const STATUS_CONFIG: Record<string, { label: string; short: string; color: string }> = {
+  present: { label: 'Presente', short: 'P', color: 'bg-emerald-500 hover:bg-emerald-600' },
+  absent: { label: 'Ausente', short: 'A', color: 'bg-rose-500 hover:bg-rose-600' },
+  late: { label: 'Tarde', short: 'T', color: 'bg-amber-400 hover:bg-amber-500' },
+  excused: { label: 'Justificado', short: 'J', color: 'bg-sky-400 hover:bg-sky-500' },
+};
 
 export function AttendancePage() {
   const currentMonth = useAttendanceStore((s) => s.currentMonth);
   const setMonth = useAttendanceStore((s) => s.setMonth);
   const activeCohortId = useAttendanceStore((s) => s.activeCohortId);
   const setActiveCohort = useAttendanceStore((s) => s.setActiveCohort);
-  const loadRecords = useAttendanceStore((s) => s.loadRecords);
-  const cohorts = useAttendanceStore((s) => s.students);
 
-  const [tab, setTab] = useState<Tab>('register');
-  const [stats, setStats] = useState<StudentStats[]>([]);
-  const [history, setHistory] = useState<AttendanceRecord[]>([]);
+  const [students, setStudents] = useState<Student[]>([]);
+  const [allDates, setAllDates] = useState<string[]>([]);
+  const [attendanceMap, setAttendanceMap] = useState<Map<string, Map<string, CellData>>>(new Map());
+  const [isLoading, setIsLoading] = useState(true);
 
+  // Comment modal state
+  const [commentModal, setCommentModal] = useState<{
+    studentId: string;
+    date: string;
+    studentName: string;
+    currentComment?: string;
+  } | null>(null);
+
+  // Initialize cohort
   useEffect(() => {
     const stored = localStorage.getItem('edutrack-active-cohort');
     if (stored && stored !== activeCohortId) {
@@ -42,114 +68,175 @@ export function AttendancePage() {
     }
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Load all data
   useEffect(() => {
-    if (activeCohortId) void loadRecords();
-  }, [activeCohortId, currentMonth]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    if (tab !== 'register' && activeCohortId) {
-      void loadStats();
-      void loadHistory();
-    }
-  }, [tab, activeCohortId, currentMonth]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const loadStats = async () => {
     if (!activeCohortId) return;
-    const students = await db.students.where('cohortId').equals(activeCohortId).toArray();
-    const nameToId = new Map(students.map(s => [s.fullName.toLowerCase(), s.id]));
+    let cancelled = false;
 
-    const year = parseInt(currentMonth.slice(0, 4), 10);
-    const month = parseInt(currentMonth.slice(5, 7), 10);
-    const endDay = new Date(year, month, 0).getDate();
-    const startDate = `${currentMonth}-01`;
-    const endDate = `${currentMonth}-${endDay}`;
+    async function load() {
+      setIsLoading(true);
+      try {
+        const [classDates, cohortStudents, allAttendance] = await Promise.all([
+          generateAllClassDates(),
+          db.students.where('cohortId').equals(activeCohortId!).sortBy('fullName' as never),
+          db.attendance.toArray(),
+        ] as const);
 
-    const allRecords = await db.attendance
-      .where('date')
-      .between(startDate, endDate, true, true)
-      .toArray();
+        if (cancelled) return;
 
-    const ids = new Set(students.map(s => s.id));
-    const cohortRecords = allRecords.filter(r =>
-      (r.studentId && ids.has(r.studentId)) ||
-      (r.studentName && nameToId.has(r.studentName.toLowerCase()))
-    );
+        const dates = classDates.map(d => d.date);
+        setAllDates(dates);
+        setStudents(cohortStudents as Student[]);
 
-    const grouped = new Map<string, AttendanceRecord[]>();
-    for (const r of cohortRecords) {
-      const sid = r.studentId || nameToId.get(r.studentName?.toLowerCase() || '');
-      if (!sid) continue;
-      if (!grouped.has(sid)) grouped.set(sid, []);
-      grouped.get(sid)!.push(r);
+        const map = new Map<string, Map<string, CellData>>();
+        for (const student of cohortStudents) {
+          const studentMap = new Map<string, CellData>();
+          for (const date of dates) {
+            studentMap.set(date, { status: null });
+          }
+          map.set((student as Student).id, studentMap);
+        }
+
+        for (const record of allAttendance) {
+          const studentMap = map.get(record.studentId);
+          if (studentMap && studentMap.has(record.date)) {
+            studentMap.set(record.date, {
+              status: record.status,
+              notes: record.notes,
+              recordId: record.id,
+            });
+          }
+        }
+
+        setAttendanceMap(map);
+      } finally {
+        if (!cancelled) setIsLoading(false);
+      }
     }
 
-    console.log('[Attendance] loadStats:', {
-      students: students.length,
-      allRecords: allRecords.length,
-      cohortRecords: cohortRecords.length,
-      grouped: grouped.size,
-    });
+    void load();
+    return () => { cancelled = true; };
+  }, [activeCohortId]);
 
-    const result: StudentStats[] = [];
-    for (const s of students) {
-      const records = grouped.get(s.id) || [];
-      const totalDays = records.length;
-      const presentDays = records.filter(r => r.status === 'present').length;
-      result.push({
-        studentId: s.id,
-        fullName: s.fullName,
-        totalDays,
-        presentDays,
-        attendanceRate: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
-      });
+  // Dates for selected month
+  const filteredDates = useMemo(() => {
+    return allDates.filter(date => date.startsWith(currentMonth));
+  }, [allDates, currentMonth]);
+
+  // Day names for header
+  const dayNames = ['Dom', 'Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb'];
+
+  // Handle cell click - cycle status
+  const handleCellClick = useCallback(async (studentId: string, date: string) => {
+    const currentData = attendanceMap.get(studentId)?.get(date);
+    const nextStatus = nextCycleStatus(currentData?.status ?? null);
+
+    // Optimistic update
+    const newMap = new Map(attendanceMap);
+    const studentMap = new Map(newMap.get(studentId)!);
+    studentMap.set(date, { status: nextStatus });
+    newMap.set(studentId, studentMap);
+    setAttendanceMap(newMap);
+
+    try {
+      if (nextStatus) {
+        await upsertAttendanceRecord(studentId, date, nextStatus);
+      } else {
+        const recordId = currentData?.recordId;
+        if (recordId) {
+          await deleteAttendanceRecord(recordId);
+        }
+      }
+    } catch (error) {
+      // Revert on error
+      const revertMap = new Map(attendanceMap);
+      const revertStudentMap = new Map(revertMap.get(studentId)!);
+      revertStudentMap.set(date, currentData ?? { status: null });
+      revertMap.set(studentId, revertStudentMap);
+      setAttendanceMap(revertMap);
+      toast.error('Error al guardar asistencia');
     }
-    result.sort((a, b) => a.attendanceRate - b.attendanceRate);
-    setStats(result);
-  };
+  }, [attendanceMap]);
 
-  const loadHistory = async () => {
-    if (!activeCohortId) return;
-    const students = await db.students.where('cohortId').equals(activeCohortId).toArray();
-    const nameToId = new Map(students.map(s => [s.fullName.toLowerCase(), s.id]));
+  // Handle save comment
+  const handleSaveComment = useCallback(async (comment: string) => {
+    if (!commentModal) return;
+    const { studentId, date } = commentModal;
 
-    const year = parseInt(currentMonth.slice(0, 4), 10);
-    const month = parseInt(currentMonth.slice(5, 7), 10);
-    const endDay = new Date(year, month, 0).getDate();
-    const startDate = `${currentMonth}-01`;
-    const endDate = `${currentMonth}-${endDay}`;
+    const currentData = attendanceMap.get(studentId)?.get(date);
+    const status = currentData?.status;
 
-    const allRecords = await db.attendance
-      .where('date')
-      .between(startDate, endDate, true, true)
-      .toArray();
+    if (!status) {
+      await upsertAttendanceRecord(studentId, date, 'present', comment || undefined);
+    } else {
+      await upsertAttendanceRecord(studentId, date, status, comment || undefined);
+    }
 
-    const ids = new Set(students.map(s => s.id));
-    const cohortRecords = allRecords.filter(r =>
-      (r.studentId && ids.has(r.studentId)) ||
-      (r.studentName && nameToId.has(r.studentName.toLowerCase()))
+    // Update map
+    const newMap = new Map(attendanceMap);
+    const studentMap = new Map(newMap.get(studentId)!);
+    studentMap.set(date, { status: status ?? 'present', notes: comment || undefined, recordId: currentData?.recordId });
+    newMap.set(studentId, studentMap);
+    setAttendanceMap(newMap);
+
+    toast.success('Comentario guardado');
+  }, [commentModal, attendanceMap]);
+
+  // Stats for current month
+  const monthStats = useMemo(() => {
+    const totals = { present: 0, absent: 0, late: 0, excused: 0, unset: 0 };
+    const today = new Date();
+    const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+    const validDates = filteredDates.filter(d => d <= todayStr);
+    const totalDays = validDates.length;
+    if (totalDays === 0 || students.length === 0) return totals;
+
+    for (const student of students) {
+      let present = 0, absent = 0, late = 0, excused = 0, unset = 0;
+      for (const date of validDates) {
+        const cell = attendanceMap.get(student.id)?.get(date);
+        if (cell?.status === 'present') present++;
+        else if (cell?.status === 'absent') absent++;
+        else if (cell?.status === 'late') late++;
+        else if (cell?.status === 'excused') excused++;
+        else unset++;
+      }
+      totals.present += Math.round((present / totalDays) * 100);
+      totals.absent += Math.round((absent / totalDays) * 100);
+      totals.late += Math.round((late / totalDays) * 100);
+      totals.excused += Math.round((excused / totalDays) * 100);
+      totals.unset += Math.round((unset / totalDays) * 100);
+    }
+
+    return {
+      present: Math.round(totals.present / students.length),
+      absent: Math.round(totals.absent / students.length),
+      late: Math.round(totals.late / students.length),
+      excused: Math.round(totals.excused / students.length),
+      unset: Math.round(totals.unset / students.length),
+    };
+  }, [filteredDates, students, attendanceMap]);
+
+  // Available months (May-August 2026 from cronograma)
+  const availableMonths = useMemo(() => {
+    const months = new Set<string>();
+    for (const date of allDates) {
+      months.add(date.slice(0, 7));
+    }
+    return Array.from(months).sort();
+  }, [allDates]);
+
+  if (!activeCohortId) {
+    return (
+      <div className="p-6">
+        <EmptyState
+          icon={<Calendar size={24} strokeWidth={1.5} />}
+          title="Sin cohorte activa"
+          description="Selecciona o crea una cohorte para gestionar asistencia."
+        />
+      </div>
     );
-
-    console.log('[Attendance] loadHistory:', {
-      allRecords: allRecords.length,
-      cohortRecords: cohortRecords.length,
-    });
-
-    cohortRecords.sort((a, b) => b.date.localeCompare(a.date));
-    setHistory(cohortRecords);
-  };
-
-  const monthOptions: string[] = [];
-  const now = new Date();
-  for (let i = 0; i < 12; i++) {
-    const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    monthOptions.push(d.toISOString().slice(0, 7));
   }
-
-  const tabs: { key: Tab; label: string; icon: typeof Calendar }[] = [
-    { key: 'register', label: 'Registrar', icon: Calendar },
-    { key: 'report', label: 'Reporte', icon: BarChart3 },
-    { key: 'history', label: 'Historial', icon: List },
-  ];
 
   return (
     <div className="p-6 space-y-6">
@@ -157,21 +244,18 @@ export function AttendancePage() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <h1 className="text-2xl font-semibold text-slate-100">Asistencia</h1>
         <div className="flex items-center gap-2">
+          <label className="text-sm text-slate-400">Mes:</label>
           <select
             value={currentMonth}
             onChange={(e) => setMonth(e.target.value)}
             className="appearance-none px-3 py-1.5 rounded-md text-sm bg-slate-800 border border-slate-700 text-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer"
             aria-label="Seleccionar mes"
           >
-            {monthOptions.map((m) => {
-              const [y, mo] = m.split('-');
-              const label = new Date(parseInt(y), parseInt(mo) - 1).toLocaleDateString('es-CL', {
-                year: 'numeric',
-                month: 'long',
-              });
+            {availableMonths.map((month) => {
+              const d = parseLocalDate(month + '-01');
               return (
-                <option key={m} value={m}>
-                  {label}
+                <option key={month} value={month}>
+                  {getMonthName(d)} {d.getFullYear()}
                 </option>
               );
             })}
@@ -179,126 +263,137 @@ export function AttendancePage() {
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 rounded-lg border border-slate-700 bg-slate-800/50 p-0.5 w-fit">
-        {tabs.map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
-              tab === t.key
-                ? 'bg-slate-700 text-slate-100 shadow-sm'
-                : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <t.icon size={14} strokeWidth={1.5} />
-            {t.label}
-          </button>
+      {/* Legend */}
+      <div className="flex flex-wrap items-center gap-4 text-sm">
+        {Object.entries(STATUS_CONFIG).map(([key, config]) => (
+          <div key={key} className="flex items-center gap-2">
+            <div className={`w-4 h-4 rounded-full ${config.color.replace(' hover:bg-', '')}`} />
+            <span className="text-slate-400">
+              {config.label} (<span className="font-mono">{config.short}</span>)
+            </span>
+          </div>
+        ))}
+        <div className="flex items-center gap-2">
+          <div className="w-4 h-4 rounded-full bg-slate-700" />
+          <span className="text-slate-400">Sin registro (-)</span>
+        </div>
+        <span className="text-xs text-slate-600 ml-auto">
+          Click para cambiar: <span className="font-mono">- → P → A → T → J → -</span>
+        </span>
+      </div>
+
+      {/* Attendance grid */}
+      <Card variant="default" padding="none" className="overflow-hidden">
+        {isLoading ? (
+          <div className="p-6 space-y-4">
+            {[1, 2, 3, 4, 5].map((i) => (
+              <Skeleton key={i} variant="text" lines={1} />
+            ))}
+          </div>
+        ) : (
+          <div className="overflow-auto max-h-[70vh]">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="bg-slate-900 sticky top-0 z-10">
+                  <th className="sticky left-0 bg-slate-900 z-20 px-4 py-2 text-left font-medium text-slate-300 border-b border-slate-800 min-w-[180px]">
+                    Estudiante
+                  </th>
+                  {filteredDates.map(date => {
+                    const d = parseLocalDate(date);
+                    return (
+                      <th
+                        key={date}
+                        className="px-1 py-2 text-center font-medium text-slate-300 border-b border-slate-800 min-w-[40px]"
+                      >
+                        <div className="text-[10px] text-slate-500">{dayNames[d.getDay()]}</div>
+                        <div className="text-sm">{d.getDate()}</div>
+                      </th>
+                    );
+                  })}
+                </tr>
+              </thead>
+              <tbody>
+                {students.map(student => (
+                  <tr key={student.id} className="border-b border-slate-800/50 hover:bg-slate-900/30">
+                    <td className="sticky left-0 bg-slate-950 z-10 px-4 py-1.5 text-sm font-medium text-slate-200 border-r border-slate-800 whitespace-nowrap">
+                      {student.fullName}
+                    </td>
+                    {filteredDates.map(date => {
+                      const cellData = attendanceMap.get(student.id)?.get(date);
+                      const status = cellData?.status;
+                      const hasNotes = !!cellData?.notes;
+                      const config = status ? STATUS_CONFIG[status] : null;
+
+                      return (
+                        <td key={date} className="px-1 py-1 text-center relative">
+                          <div className="flex items-center justify-center gap-0.5">
+                            <button
+                              onClick={() => handleCellClick(student.id, date)}
+                              className={`w-7 h-7 rounded-full text-xs font-medium transition-all ${
+                                config
+                                  ? `${config.color} text-white shadow-sm`
+                                  : 'bg-slate-700/50 hover:bg-slate-600 text-slate-400'
+                              }`}
+                              title={`${student.fullName} — ${date}: ${config?.label ?? 'Sin registro'}`}
+                            >
+                              {config ? config.short : '-'}
+                            </button>
+                            <button
+                              onClick={() => setCommentModal({
+                                studentId: student.id,
+                                date,
+                                studentName: student.fullName,
+                                currentComment: cellData?.notes,
+                              })}
+                              className={`w-5 h-5 rounded flex items-center justify-center transition-colors ${
+                                hasNotes
+                                  ? 'text-indigo-400 hover:text-indigo-300'
+                                  : 'text-slate-600 hover:text-slate-400'
+                              }`}
+                              title={hasNotes ? 'Editar comentario' : 'Agregar comentario'}
+                            >
+                              <MessageSquare size={10} strokeWidth={1.5} />
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    })}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
+
+      {/* Monthly summary */}
+      <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+        {([
+          ['Presentes', 'present', 'text-emerald-400'],
+          ['Ausentes', 'absent', 'text-rose-400'],
+          ['Tardes', 'late', 'text-amber-400'],
+          ['Justificados', 'excused', 'text-sky-400'],
+          ['Sin registro', 'unset', 'text-slate-500'],
+        ] as const).map(([label, key, color]) => (
+          <Card key={key} variant="default" padding="md" className="text-center">
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className={`text-2xl font-bold font-mono mt-1 ${color}`}>
+              {monthStats[key as keyof typeof monthStats]}%
+            </p>
+          </Card>
         ))}
       </div>
 
-      {/* Tab content */}
-      {tab === 'register' && <AttendanceTaker />}
-
-      {tab === 'report' && (
-        <Card variant="default" padding="none" className="overflow-hidden">
-          {stats.length === 0 ? (
-            <div className="p-6">
-              <EmptyState
-                icon={<BarChart3 size={24} strokeWidth={1.5} />}
-                title="Sin datos"
-                description="No hay registros de asistencia para este mes."
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Estudiante</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Total Días</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Presentes</th>
-                    <th className="px-4 py-3 text-right text-xs font-medium text-slate-500 uppercase">Asistencia</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {stats.map((s) => (
-                    <tr key={s.studentId} className="hover:bg-slate-800/30">
-                      <td className="px-4 py-3 text-slate-200">{s.fullName}</td>
-                      <td className="px-4 py-3 text-center text-slate-400">{s.totalDays}</td>
-                      <td className="px-4 py-3 text-center text-slate-400">{s.presentDays}</td>
-                      <td className="px-4 py-3 text-right">
-                        <span
-                          className={`font-mono text-sm ${
-                            s.attendanceRate >= 85
-                              ? 'text-emerald-400'
-                              : s.attendanceRate >= 70
-                                ? 'text-amber-400'
-                                : 'text-rose-400'
-                          }`}
-                        >
-                          {s.attendanceRate}%
-                        </span>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
-      )}
-
-      {tab === 'history' && (
-        <Card variant="default" padding="none" className="overflow-hidden">
-          {history.length === 0 ? (
-            <div className="p-6">
-              <EmptyState
-                icon={<List size={24} strokeWidth={1.5} />}
-                title="Sin historial"
-                description="No hay registros de asistencia para este mes."
-              />
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-sm">
-                <thead>
-                  <tr className="border-b border-slate-800">
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Fecha</th>
-                    <th className="px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase">Estudiante</th>
-                    <th className="px-4 py-3 text-center text-xs font-medium text-slate-500 uppercase">Estado</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800/50">
-                  {history.map((r) => {
-                    const student = cohorts.find((c) => c.id === r.studentId);
-                    const statusColors: Record<string, string> = {
-                      present: 'text-emerald-400',
-                      absent: 'text-rose-400',
-                      late: 'text-amber-400',
-                      excused: 'text-sky-400',
-                    };
-                    const statusLabels: Record<string, string> = {
-                      present: 'Presente',
-                      absent: 'Ausente',
-                      late: 'Tarde',
-                      excused: 'Justificado',
-                    };
-                    return (
-                      <tr key={r.id} className="hover:bg-slate-800/30">
-                        <td className="px-4 py-3 text-slate-400 font-mono text-xs">{r.date}</td>
-                        <td className="px-4 py-3 text-slate-200">{student?.fullName ?? r.studentId}</td>
-                        <td className={`px-4 py-3 text-center font-medium ${statusColors[r.status] ?? 'text-slate-500'}`}>
-                          {statusLabels[r.status] ?? r.status}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </Card>
+      {/* Comment modal */}
+      {commentModal && (
+        <AttendanceCommentModal
+          open
+          onOpenChange={() => setCommentModal(null)}
+          studentName={commentModal.studentName}
+          date={commentModal.date}
+          currentComment={commentModal.currentComment}
+          onSave={handleSaveComment}
+        />
       )}
     </div>
   );

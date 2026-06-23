@@ -100,6 +100,43 @@ export async function getAttendanceStats(
   return { totalDays, presentDays, absentDays, lateDays, excusedDays, attendanceRate };
 }
 
+export async function upsertAttendanceRecord(
+  studentId: string,
+  date: string,
+  status: AttendanceRecord['status'],
+  notes?: string
+): Promise<void> {
+  const existing = await db.attendance
+    .where('[studentId+date]')
+    .equals([studentId, date])
+    .first();
+
+  const now = new Date().toISOString();
+
+  if (existing) {
+    await db.attendance.update(existing.id, {
+      status,
+      notes: notes ?? existing.notes,
+      updatedAt: now,
+    });
+  } else {
+    const newRecord: AttendanceRecord = {
+      id: `att-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      studentId,
+      date,
+      status,
+      notes,
+      uploadedAt: now,
+      updatedAt: now,
+    };
+    await db.attendance.add(newRecord);
+  }
+}
+
+export async function deleteAttendanceRecord(id: string): Promise<void> {
+  await db.attendance.delete(id);
+}
+
 export async function getDatesForMonth(
   cohortId: string,
   year: number,

@@ -6,4 +6,5 @@ export interface AttendanceRecord {
   status: 'present' | 'absent' | 'late' | 'excused';
   notes?: string;
   uploadedAt: string;
+  updatedAt?: string;
 }

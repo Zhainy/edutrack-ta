@@ -34,6 +34,7 @@ import { Modal } from '@/shared/ui/modal';
 import { toast } from '@/shared/ui/toast';
 import { calculateRisk } from '@/features/risk-engine';
 import { deleteStudent, getPendingActivities } from '@/features/students';
+import { StatusSelector } from '@/features/students/ui/status-selector';
 import type { Student } from '@/entities/student';
 import type { RiskOutput } from '@/features/risk-engine';
 
@@ -44,7 +45,7 @@ interface StudentWithRisk {
   overdueCount: number;
 }
 
-type StatusFilter = 'all' | 'active' | 'dropout' | 'inactive';
+type StatusFilter = 'all' | 'active' | 'dropout' | 'inactive' | 'replacement';
 type RiskFilter = 'all' | 'high' | 'medium' | 'low';
 
 const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
@@ -52,6 +53,7 @@ const STATUS_OPTIONS: { value: StatusFilter; label: string }[] = [
   { value: 'active', label: 'Activos' },
   { value: 'dropout', label: 'Desertores' },
   { value: 'inactive', label: 'Inactivos' },
+  { value: 'replacement', label: 'Reemplazo' },
 ];
 
 const RISK_OPTIONS: { value: RiskFilter; label: string }[] = [
@@ -60,10 +62,6 @@ const RISK_OPTIONS: { value: RiskFilter; label: string }[] = [
   { value: 'medium', label: 'Medio' },
   { value: 'low', label: 'Bajo' },
 ];
-
-function statusVariant(status: Student['status']): 'active' | 'dropout' | 'inactive' {
-  return status;
-}
 
 function riskBadgeVariant(level: RiskOutput['riskLevel']): 'risk-high' | 'risk-medium' | 'risk-low' {
   if (level === 'high') return 'risk-high';
@@ -291,9 +289,20 @@ export function StudentsPage() {
         header: 'Estado',
         accessorFn: (row) => row.student.status,
         cell: ({ row }) => (
-          <Badge variant={statusVariant(row.original.student.status)}>
-            {row.original.student.status}
-          </Badge>
+          <StatusSelector
+            studentId={row.original.student.id}
+            currentStatus={row.original.student.status}
+            size="sm"
+            onChange={(newStatus) => {
+              setData((prev) =>
+                prev.map((item) =>
+                  item.student.id === row.original.student.id
+                    ? { ...item, student: { ...item.student, status: newStatus } }
+                    : item
+                )
+              );
+            }}
+          />
         ),
         enableSorting: true,
       },

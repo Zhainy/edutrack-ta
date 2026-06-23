@@ -6,6 +6,8 @@ export {
   bulkMarkAttendance,
   getAttendanceStats,
   getDatesForMonth,
+  upsertAttendanceRecord,
+  deleteAttendanceRecord,
 } from './api/attendance-api';
 
 export { useAttendanceStore, nextStatus } from './model/attendance-store';

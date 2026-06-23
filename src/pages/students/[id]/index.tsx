@@ -49,6 +49,7 @@ import { getPendingActivities } from '@/features/students/lib/pending-activities
 import { NoteTimeline } from '@/features/crm/ui/note-timeline';
 import { NoteForm } from '@/features/crm/ui/note-form';
 import { createNote, updateNote, deleteNote, toggleComplete } from '@/features/crm/api/crm-api';
+import { StatusSelector } from '@/features/students/ui/status-selector';
 import type { Student } from '@/entities/student';
 import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
@@ -59,10 +60,6 @@ import type { Note } from '@/entities/note';
 import type { RiskOutput } from '@/features/risk-engine';
 
 // ── Helpers ──────────────────────────────────────────────────────────────
-
-function statusVariant(s: Student['status']): 'active' | 'dropout' | 'inactive' {
-  return s;
-}
 
 function riskBadgeVariant(l: RiskOutput['riskLevel']): 'risk-high' | 'risk-medium' | 'risk-low' {
   if (l === 'high') return 'risk-high';
@@ -1176,13 +1173,11 @@ export function StudentDetailPage() {
               <h1 className="text-xl font-semibold text-slate-100 truncate">
                 {student.fullName}
               </h1>
-              <Badge variant={statusVariant(student.status)}>
-                {student.status === 'active'
-                  ? 'Activo'
-                  : student.status === 'dropout'
-                    ? 'Desertor'
-                    : 'Inactivo'}
-              </Badge>
+              <StatusSelector
+                studentId={student.id}
+                currentStatus={student.status}
+                onChange={(newStatus) => setStudent({ ...student, status: newStatus })}
+              />
             </div>
             {student.email && (
               <p className="text-sm text-slate-400 mt-1">{student.email}</p>

@@ -6,6 +6,8 @@ export {
   getCohortById,
   bulkImportStudents,
   deleteStudent,
+  updateStudent,
+  updateStudentStatus,
   getStudentMetrics,
   getAllStudentMetrics,
 } from './api/students-api';
