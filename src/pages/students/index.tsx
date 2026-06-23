@@ -146,7 +146,9 @@ function FilterBar({
 
 function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<StudentWithRisk>> }) {
   const parentRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
   const rows = table.getRowModel().rows;
+  const headerGroups = table.getHeaderGroups();
 
   const rowVirtualizer = useVirtualizer({
     count: rows.length,
@@ -156,10 +158,10 @@ function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<St
   });
 
   return (
-    <div className="overflow-x-auto">
-      <table className="w-full">
-        <thead>
-          {table.getHeaderGroups().map((headerGroup) => (
+    <div className="overflow-x-auto" style={{ tableLayout: 'fixed' as const }}>
+      <table className="w-full" style={{ tableLayout: 'fixed' as const }}>
+        <thead className="bg-slate-900/50">
+          {headerGroups.map((headerGroup) => (
             <tr key={headerGroup.id} className="border-b border-slate-800">
               {headerGroup.headers.map((header) => (
                 <th
@@ -170,12 +172,12 @@ function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<St
                       'cursor-pointer select-none hover:text-slate-300 transition-colors'
                   )}
                   onClick={header.column.getToggleSortingHandler()}
-                  style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
+                  style={{ width: `${header.getSize()}px`, minWidth: `${header.getSize()}px` }}
                 >
                   <div className="flex items-center gap-1">
                     {flexRender(header.column.columnDef.header, header.getContext())}
                     {header.column.getCanSort() && (
-                      <span className="text-slate-600">
+                      <span className="text-slate-600 flex-shrink-0">
                         {header.column.getIsSorted() === 'asc' ? (
                           <ChevronUp size={14} strokeWidth={1.5} />
                         ) : header.column.getIsSorted() === 'desc' ? (
@@ -195,7 +197,7 @@ function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<St
       <div
         ref={parentRef}
         className="overflow-auto"
-        style={{ height: `${Math.min(rows.length * 60, 600)}px` }}
+        style={{ height: `${Math.min(rows.length * 60, 480)}px` }}
       >
         <div
           style={{
@@ -204,39 +206,44 @@ function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<St
             position: 'relative',
           }}
         >
-          {rowVirtualizer.getVirtualItems().map((virtualRow) => {
-            const row = rows[virtualRow.index];
-            return (
-              <div
-                key={row.id}
-                style={{
-                  position: 'absolute',
-                  top: 0,
-                  left: 0,
-                  width: '100%',
-                  height: `${virtualRow.size}px`,
-                  transform: `translateY(${virtualRow.start}px)`,
-                }}
-                className="hover:bg-slate-800/30 transition-colors"
-              >
-                <table className="w-full">
-                  <tbody className="divide-y divide-slate-800/50">
-                    <tr className="hover:bg-slate-800/30 transition-colors">
-                      {row.getVisibleCells().map((cell) => (
+          <table
+            ref={tableRef}
+            className="w-full"
+            style={{ tableLayout: 'fixed' as const, position: 'absolute', top: 0, left: 0 }}
+          >
+            <tbody>
+              {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
+                const row = rows[virtualRow.index];
+                const isLast = index === rowVirtualizer.getVirtualItems().length - 1;
+                return (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      'hover:bg-slate-800/30 transition-colors',
+                      !isLast && 'border-b border-slate-800/50',
+                      row.getIsSelected() && 'bg-indigo-500/5'
+                    )}
+                    style={{ height: `${virtualRow.size}px` }}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const colId = cell.column.id;
+                      const col = headerGroups[0]?.headers.find((h) => h.id === colId);
+                      const width = col ? col.getSize() : 150;
+                      return (
                         <td
                           key={cell.id}
-                          className="px-4 py-3 text-sm whitespace-nowrap"
-                          style={{ width: cell.column.getSize() !== 150 ? cell.column.getSize() : undefined }}
+                          className="px-4 py-3 text-sm truncate"
+                          style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
                         >
                           {flexRender(cell.column.columnDef.cell, cell.getContext())}
                         </td>
-                      ))}
-                    </tr>
-                  </tbody>
-                </table>
-              </div>
-            );
-          })}
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -430,11 +437,15 @@ export function StudentsPage() {
           </button>
         ),
         enableSorting: false,
-        size: 60,
+        size: 50,
+        minSize: 50,
+        maxSize: 50,
       },
       {
         id: 'fullName',
         header: 'Nombre',
+        size: 220,
+        minSize: 180,
         accessorFn: (row) => row.student.fullName,
         cell: ({ row }) => (
           <Link
@@ -466,6 +477,9 @@ export function StudentsPage() {
       {
         id: 'status',
         header: 'Estado',
+        size: 130,
+        minSize: 120,
+        maxSize: 140,
         accessorFn: (row) => row.student.status,
         cell: ({ row }) => (
           <StatusSelector
@@ -488,6 +502,8 @@ export function StudentsPage() {
       {
         id: 'riskScore',
         header: 'Riesgo',
+        size: 150,
+        minSize: 140,
         accessorFn: (row) => row.risk?.riskScore ?? null,
         cell: ({ row }) => {
           const risk = row.original.risk;
@@ -523,6 +539,8 @@ export function StudentsPage() {
       {
         id: 'attendanceRate',
         header: 'Asistencia',
+        size: 100,
+        minSize: 80,
         accessorFn: (row) => row.risk?.metrics.attendanceRate ?? null,
         cell: ({ row }) => {
           const rate = row.original.risk?.metrics.attendanceRate;
@@ -538,6 +556,8 @@ export function StudentsPage() {
       {
         id: 'completionRate',
         header: 'Horas',
+        size: 80,
+        minSize: 70,
         accessorFn: (row) => row.risk?.metrics.completionRate ?? null,
         cell: ({ row }) => {
           const rate = row.original.risk?.metrics.completionRate;
@@ -553,6 +573,8 @@ export function StudentsPage() {
       {
         id: 'pending',
         header: 'Pendientes',
+        size: 120,
+        minSize: 110,
         accessorFn: (row) => row.overdueCount,
         cell: ({ row }) => {
           const { pendingCount, overdueCount } = row.original;
@@ -569,6 +591,8 @@ export function StudentsPage() {
       {
         id: 'tags',
         header: 'Tags',
+        size: 140,
+        minSize: 100,
         accessorFn: (row) => row.student.tags,
         cell: ({ row }) => {
           const tags = row.original.student.tags;
@@ -592,6 +616,10 @@ export function StudentsPage() {
       {
         id: 'actions',
         header: '',
+        size: 80,
+        minSize: 80,
+        maxSize: 80,
+        enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             <Link
@@ -611,7 +639,6 @@ export function StudentsPage() {
             </button>
           </div>
         ),
-        enableSorting: false,
       },
     ],
     []
