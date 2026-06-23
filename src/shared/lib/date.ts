@@ -1,4 +1,4 @@
-import { format, parseISO, isValid, differenceInDays } from 'date-fns';
+import { format, parseISO, isValid, differenceInDays, formatDistanceToNow } from 'date-fns';
 import { es } from 'date-fns/locale';
 
 /**
@@ -39,4 +39,36 @@ export function todayISO(): string {
  */
 export function toISODate(date: Date): string {
   return format(date, 'yyyy-MM-dd');
+}
+
+/**
+ * Returns a human-readable relative date string in Spanish.
+ * e.g. "hace 2 días", "ayer", "hoy"
+ */
+export function relativeDate(isoDate: string): string {
+  try {
+    const date = parseISO(isoDate);
+    if (!isValid(date)) return '—';
+    const now = new Date();
+    const diffDays = differenceInDays(now, date);
+    if (diffDays === 0) return 'hoy';
+    if (diffDays === 1) return 'ayer';
+    if (diffDays < 7) return `hace ${diffDays} días`;
+    return formatDistanceToNow(date, { addSuffix: true, locale: es });
+  } catch {
+    return '—';
+  }
+}
+
+/**
+ * Formats an ISO date string to date portion only (YYYY-MM-DD).
+ */
+export function toDateOnly(isoDate: string): string {
+  try {
+    const date = parseISO(isoDate);
+    if (!isValid(date)) return '—';
+    return format(date, 'yyyy-MM-dd');
+  } catch {
+    return '—';
+  }
 }

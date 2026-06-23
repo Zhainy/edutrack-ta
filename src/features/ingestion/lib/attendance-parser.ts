@@ -83,12 +83,12 @@ export async function parseStudentsFromAttendanceFile(
 
     console.log(`[parseStudents] Total filas leídas: ${rawRows.length}`);
     console.log(`[parseStudents] Fila 0 (codigo):`, rawRows[0]);
-    console.log(`[parseStudents] Fila 4 (headers):`, rawRows[4]);
+    console.log(`[parseStudents] Fila 1 (headers):`, rawRows[1]);
 
-    // Row 0-3: metadata (course code, name, empty, empty)
-    // Row 4: headers (Rut, Nombre, ..., Correo, Teléfono, ...)
-    // Row 5+: student data
-    const dataRows = rawRows.slice(5);
+    // Row 0: course code + name
+    // Row 1: headers (Rut, Nombre, ..., Correo, Teléfono, ...)
+    // Row 2+: student data
+    const dataRows = rawRows.slice(2);
 
     const students: Student[] = [];
     const errors: ValidationError[] = [];
@@ -261,7 +261,8 @@ export async function parseAttendanceXLSX(
 
           // Read cell comment if present
           const cellRef = XLSX.utils.encode_cell({ r: row, c: col });
-          const commentText = (sheet[cellRef] as { c?: Array<{ t?: string }> } | undefined)?.c?.[0]?.t ?? '';
+          const rawComment = (sheet[cellRef] as { c?: Array<{ t?: string }> } | undefined)?.c?.[0]?.t ?? '';
+          const commentText = cleanStudentName(rawComment);
 
           allRecords.push({
             id: crypto.randomUUID(),
@@ -278,6 +279,7 @@ export async function parseAttendanceXLSX(
             allNotes.push({
               id: crypto.randomUUID(),
               studentId: '',
+              studentName,
               type: 'context',
               title: `Asistencia ${dateStr}`,
               content: commentText,
@@ -339,6 +341,7 @@ export async function parseAttendanceXLSX(
           moduleGrades.push({
             id: crypto.randomUUID(),
             studentId: '',
+            studentName,
             cohortId: '',
             moduleNumber,
             grade,
@@ -350,6 +353,7 @@ export async function parseAttendanceXLSX(
           allNotes.push({
             id: crypto.randomUUID(),
             studentId: '',
+            studentName,
             type: 'alert',
             title: `Evaluación Módulo ${moduleNumber}`,
             content: `${studentName}: ${cellText}`,

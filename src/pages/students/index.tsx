@@ -177,7 +177,7 @@ export function StudentsPage() {
         setIsLoading(true);
         setError(null);
 
-        const [students, allAttendance, allProgress, allDedication, allSyllabus] =
+        const [rawStudents, allAttendance, allProgress, allDedication, allSyllabus] =
           await Promise.all([
             db.students.toArray(),
             db.attendance.toArray(),
@@ -185,6 +185,10 @@ export function StudentsPage() {
             db.dedication.toArray(),
             db.syllabus.toArray(),
           ]);
+
+        const students = rawStudents.sort((a, b) =>
+          a.fullName.localeCompare(b.fullName, 'es', { sensitivity: 'base' })
+        );
 
         const referenceDate = new Date();
 

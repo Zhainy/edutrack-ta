@@ -1,6 +1,7 @@
 export interface Note {
   id: string;
   studentId: string;
+  studentName?: string;
   type: 'context' | 'action' | 'alert' | 'general';
   title: string;
   content?: string;

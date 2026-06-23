@@ -1,21 +1,51 @@
 import { db } from '@/shared/lib/database';
 import type { AttendanceRecord } from '@/entities/attendance';
 
+function buildStudentLookup(cohortId: string): Promise<{ ids: Set<string>; nameToId: Map<string, string> }> {
+  return db.students.where('cohortId').equals(cohortId).toArray().then(students => ({
+    ids: new Set(students.map(s => s.id)),
+    nameToId: new Map(students.map(s => [s.fullName.toLowerCase(), s.id])),
+  }));
+}
+
+function recordMatchesStudent(record: AttendanceRecord, lookup: { ids: Set<string>; nameToId: Map<string, string> }): boolean {
+  if (record.studentId && lookup.ids.has(record.studentId)) return true;
+  if (record.studentName) {
+    const id = lookup.nameToId.get(record.studentName.toLowerCase());
+    if (id) return true;
+  }
+  return false;
+}
+
 export async function getAttendanceByDateRange(
   cohortId: string,
   startDate: string,
   endDate: string
 ): Promise<AttendanceRecord[]> {
-  const students = await db.students.where('cohortId').equals(cohortId).toArray();
-  const studentIds = students.map((s) => s.id);
-  if (studentIds.length === 0) return [];
+  const lookup = await buildStudentLookup(cohortId);
+  if (lookup.ids.size === 0) {
+    console.log('[getAttendanceByDateRange] No students found for cohort', cohortId);
+    return [];
+  }
 
   const all = await db.attendance
     .where('date')
     .between(startDate, endDate, true, true)
     .toArray();
 
-  return all.filter((a) => studentIds.includes(a.studentId));
+  const result = all.filter(a => recordMatchesStudent(a, lookup));
+
+  console.log('[getAttendanceByDateRange]', {
+    cohortId,
+    startDate,
+    endDate,
+    studentsCount: lookup.ids.size,
+    totalRecordsInRange: all.length,
+    recordsWithEmptyStudentId: all.filter(a => !a.studentId).length,
+    recordsMatchingCohort: result.length,
+  });
+
+  return result;
 }
 
 export async function getAttendanceByDate(

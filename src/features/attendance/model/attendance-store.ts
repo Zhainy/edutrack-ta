@@ -94,7 +94,10 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
 
   loadRecords: async () => {
     const { currentMonth, activeCohortId } = get();
-    if (!activeCohortId) return;
+    if (!activeCohortId) {
+      console.log('[attendance-store] No activeCohortId, skipping load');
+      return;
+    }
 
     set({ isLoading: true });
     try {
@@ -103,19 +106,26 @@ export const useAttendanceStore = create<AttendanceState>((set, get) => ({
       const startDate = `${currentMonth}-01`;
       const endDate = `${currentMonth}-${new Date(year, month, 0).getDate()}`;
 
+      console.log('[attendance-store] Loading records for', { activeCohortId, currentMonth, startDate, endDate });
+
       const students = await db.students
         .where('cohortId')
         .equals(activeCohortId)
         .toArray();
       const studentList = students.map((s) => ({ id: s.id, fullName: s.fullName }));
 
+      console.log('[attendance-store] Students found:', studentList.length);
+
       const records = await getAttendanceByDateRange(activeCohortId, startDate, endDate);
 
       const dateSet = new Set(records.map((r) => r.date));
       const dates = Array.from(dateSet).sort();
 
+      console.log('[attendance-store] Records loaded:', records.length, 'Dates:', dates.length);
+
       set({ records, students: studentList, dates, isLoading: false });
-    } catch {
+    } catch (err) {
+      console.error('[attendance-store] Error loading records:', err);
       set({ isLoading: false });
     }
   },

@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Calendar, BarChart3, List } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { EmptyState } from '@/shared/ui/empty-state';
-import { useAttendanceStore, AttendanceTaker, getAttendanceStats, getAttendanceByDateRange } from '@/features/attendance';
+import { useAttendanceStore, AttendanceTaker } from '@/features/attendance';
 import { db } from '@/shared/lib/database';
 import type { AttendanceRecord } from '@/entities/attendance';
 
@@ -56,15 +56,51 @@ export function AttendancePage() {
   const loadStats = async () => {
     if (!activeCohortId) return;
     const students = await db.students.where('cohortId').equals(activeCohortId).toArray();
+    const nameToId = new Map(students.map(s => [s.fullName.toLowerCase(), s.id]));
+
+    const year = parseInt(currentMonth.slice(0, 4), 10);
+    const month = parseInt(currentMonth.slice(5, 7), 10);
+    const endDay = new Date(year, month, 0).getDate();
+    const startDate = `${currentMonth}-01`;
+    const endDate = `${currentMonth}-${endDay}`;
+
+    const allRecords = await db.attendance
+      .where('date')
+      .between(startDate, endDate, true, true)
+      .toArray();
+
+    const ids = new Set(students.map(s => s.id));
+    const cohortRecords = allRecords.filter(r =>
+      (r.studentId && ids.has(r.studentId)) ||
+      (r.studentName && nameToId.has(r.studentName.toLowerCase()))
+    );
+
+    const grouped = new Map<string, AttendanceRecord[]>();
+    for (const r of cohortRecords) {
+      const sid = r.studentId || nameToId.get(r.studentName?.toLowerCase() || '');
+      if (!sid) continue;
+      if (!grouped.has(sid)) grouped.set(sid, []);
+      grouped.get(sid)!.push(r);
+    }
+
+    console.log('[Attendance] loadStats:', {
+      students: students.length,
+      allRecords: allRecords.length,
+      cohortRecords: cohortRecords.length,
+      grouped: grouped.size,
+    });
+
     const result: StudentStats[] = [];
     for (const s of students) {
-      const st = await getAttendanceStats(s.id, currentMonth);
+      const records = grouped.get(s.id) || [];
+      const totalDays = records.length;
+      const presentDays = records.filter(r => r.status === 'present').length;
       result.push({
         studentId: s.id,
         fullName: s.fullName,
-        totalDays: st.totalDays,
-        presentDays: st.presentDays,
-        attendanceRate: st.attendanceRate,
+        totalDays,
+        presentDays,
+        attendanceRate: totalDays > 0 ? Math.round((presentDays / totalDays) * 100) : 0,
       });
     }
     result.sort((a, b) => a.attendanceRate - b.attendanceRate);
@@ -73,12 +109,33 @@ export function AttendancePage() {
 
   const loadHistory = async () => {
     if (!activeCohortId) return;
+    const students = await db.students.where('cohortId').equals(activeCohortId).toArray();
+    const nameToId = new Map(students.map(s => [s.fullName.toLowerCase(), s.id]));
+
     const year = parseInt(currentMonth.slice(0, 4), 10);
     const month = parseInt(currentMonth.slice(5, 7), 10);
     const endDay = new Date(year, month, 0).getDate();
-    const records = await getAttendanceByDateRange(activeCohortId, `${currentMonth}-01`, `${currentMonth}-${endDay}`);
-    records.sort((a, b) => b.date.localeCompare(a.date));
-    setHistory(records);
+    const startDate = `${currentMonth}-01`;
+    const endDate = `${currentMonth}-${endDay}`;
+
+    const allRecords = await db.attendance
+      .where('date')
+      .between(startDate, endDate, true, true)
+      .toArray();
+
+    const ids = new Set(students.map(s => s.id));
+    const cohortRecords = allRecords.filter(r =>
+      (r.studentId && ids.has(r.studentId)) ||
+      (r.studentName && nameToId.has(r.studentName.toLowerCase()))
+    );
+
+    console.log('[Attendance] loadHistory:', {
+      allRecords: allRecords.length,
+      cohortRecords: cohortRecords.length,
+    });
+
+    cohortRecords.sort((a, b) => b.date.localeCompare(a.date));
+    setHistory(cohortRecords);
   };
 
   const monthOptions: string[] = [];

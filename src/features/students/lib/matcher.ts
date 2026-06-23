@@ -61,9 +61,13 @@ export async function matchAllRecords(): Promise<{
   let matched = 0;
   let unmatched = 0;
 
+  console.log('[Matcher] Starting matchAllRecords...');
+
   const unmatchedAttendance = await db.attendance
     .filter(a => !a.studentId || a.studentId === '')
     .toArray();
+
+  console.log(`[Matcher] Unmatched attendance: ${unmatchedAttendance.length}`);
 
   for (const record of unmatchedAttendance) {
     const studentId = await findStudentId(record.studentName);
@@ -72,12 +76,15 @@ export async function matchAllRecords(): Promise<{
       matched++;
     } else {
       unmatched++;
+      console.warn(`[Matcher] Could not match attendance: "${record.studentName}" on ${record.date}`);
     }
   }
 
   const unmatchedDedication = await db.dedication
     .filter(d => !d.studentId || d.studentId === '')
     .toArray();
+
+  console.log(`[Matcher] Unmatched dedication: ${unmatchedDedication.length}`);
 
   for (const record of unmatchedDedication) {
     const studentId = await findStudentId(record.studentName);
@@ -93,6 +100,8 @@ export async function matchAllRecords(): Promise<{
     .filter(p => !p.studentId || p.studentId === '')
     .toArray();
 
+  console.log(`[Matcher] Unmatched progress: ${unmatchedProgress.length}`);
+
   for (const record of unmatchedProgress) {
     const studentId = await findStudentId(undefined, record.studentEmail);
     if (studentId) {
@@ -103,5 +112,42 @@ export async function matchAllRecords(): Promise<{
     }
   }
 
+  const unmatchedNotes = await db.notes
+    .filter(n => !n.studentId || n.studentId === '')
+    .toArray();
+
+  console.log(`[Matcher] Unmatched notes: ${unmatchedNotes.length}`);
+
+  for (const record of unmatchedNotes) {
+    const name = record.studentName;
+    if (!name) continue;
+    const studentId = await findStudentId(name);
+    if (studentId) {
+      await db.notes.update(record.id, { studentId });
+      matched++;
+    } else {
+      unmatched++;
+    }
+  }
+
+  const unmatchedModuleGrades = await db.moduleGrades
+    .filter(g => !g.studentId || g.studentId === '')
+    .toArray();
+
+  console.log(`[Matcher] Unmatched module grades: ${unmatchedModuleGrades.length}`);
+
+  for (const record of unmatchedModuleGrades) {
+    const name = record.studentName;
+    if (!name) continue;
+    const studentId = await findStudentId(name);
+    if (studentId) {
+      await db.moduleGrades.update(record.id, { studentId });
+      matched++;
+    } else {
+      unmatched++;
+    }
+  }
+
+  console.log(`[Matcher] Final: ${matched} matched, ${unmatched} unmatched`);
   return { matched, unmatched };
 }

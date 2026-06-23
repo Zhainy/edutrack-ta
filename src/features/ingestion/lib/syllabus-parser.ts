@@ -23,7 +23,7 @@ interface RawModuleEntry {
   schedule: string;
 }
 
-export async function parseSyllabusXLSX(file: File): Promise<ParseResult<SyllabusModule>> {
+export async function parseSyllabusXLSX(file: File, cohortId?: string): Promise<ParseResult<SyllabusModule>> {
   console.log(`[syllabus-parser] Parsing syllabus XLSX: ${file.name}`);
 
   try {
@@ -43,18 +43,6 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
 
     const data = XLSX.utils.sheet_to_json<string[]>(sheet, { header: 1, defval: '', raw: false });
 
-    // ── Extract cohort metadata (rows 1-9) ───────────────────────────────
-    let codigo = '';
-    for (let i = 0; i < Math.min(12, data.length); i++) {
-      const row = data[i];
-      if (!row) continue;
-      const label = String(row[0] ?? '').trim().toUpperCase();
-      const value = String(row[1] ?? '').trim();
-      if (label.includes('CÓDIGO') || label.includes('CODIGO')) codigo = value;
-    }
-
-    // ── Parse module detail rows ─────────────────────────────────────────
-    // Table headers start at row 27 (0-based), module rows at 28+
     const errors: ValidationError[] = [];
     const moduleEntries: RawModuleEntry[] = [];
     let currentModule: { number: number; name: string } | null = null;
@@ -119,7 +107,7 @@ export async function parseSyllabusXLSX(file: File): Promise<ParseResult<Syllabu
 
       modules.push({
         id: crypto.randomUUID(),
-        cohortId: codigo,
+        cohortId: cohortId ?? '',
         moduleNumber: modNum,
         moduleName: name,
         startDate: dates[0] ?? '',

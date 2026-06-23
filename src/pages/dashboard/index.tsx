@@ -1,12 +1,14 @@
 import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-import { Users, UserCheck, AlertTriangle, CalendarCheck } from 'lucide-react';
+import { Users, UserCheck, AlertTriangle, CalendarCheck, MessageSquare } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
 import { Skeleton } from '@/shared/ui/skeleton';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { db } from '@/shared/lib/database';
 import { calculateRisk } from '@/features/risk-engine';
+import { relativeDate } from '@/shared/lib/date';
 import type { Student } from '@/entities/student';
 import type { AttendanceRecord } from '@/entities/attendance';
 import type { SyllabusModule } from '@/entities/syllabus';
@@ -90,6 +92,7 @@ function priorityVariant(
 // ── Main component ────────────────────────────────────────────────────────────
 
 export function DashboardPage() {
+  const navigate = useNavigate();
   const [data, setData] = useState<DashboardData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -118,6 +121,10 @@ export function DashboardPage() {
           db.notes.orderBy('createdAt').reverse().limit(5).toArray(),
         ]);
 
+        students.sort((a, b) =>
+          a.fullName.localeCompare(b.fullName, 'es', { sensitivity: 'base' })
+        );
+
         const referenceDate = new Date();
 
         const studentRisks: StudentWithRisk[] = students
@@ -141,7 +148,7 @@ export function DashboardPage() {
             studentRisks,
             attendance: allAttendance,
             recentNotes: allNotes,
-            syllabus: allSyllabus,
+            syllabus: allSyllabus.sort((a, b) => a.moduleNumber - b.moduleNumber),
           });
         }
       } catch (err) {
@@ -344,7 +351,10 @@ export function DashboardPage() {
 
       {/* Recent notes */}
       <Card variant="default" padding="lg">
-        <h3 className="text-sm font-semibold text-slate-300 mb-4">Actividad Reciente</h3>
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-sm font-semibold text-slate-300">Notas Recientes</h3>
+          <MessageSquare size={16} strokeWidth={1.5} className="text-slate-500" />
+        </div>
         {isLoading ? (
           <div className="space-y-3">
             {[1, 2, 3].map((i) => (
@@ -355,22 +365,28 @@ export function DashboardPage() {
           <EmptyState title="Sin notas recientes" description="Aún no hay notas registradas." />
         ) : (
           <div className="space-y-3">
-            {data?.recentNotes.map((note) => (
-              <div
-                key={note.id}
-                className="flex items-start gap-3 py-2 border-b border-slate-800 last:border-0"
-              >
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-200">{note.title}</p>
-                  {note.content && (
-                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">{note.content}</p>
-                  )}
+            {data?.recentNotes.map((note) => {
+              const student = data.students.find(s => s.id === note.studentId);
+              return (
+                <div
+                  key={note.id}
+                  className="flex items-start gap-3 py-2 border-b border-slate-800 last:border-0 cursor-pointer hover:bg-slate-800/30 rounded-lg px-2 -mx-2 transition-colors"
+                  onClick={() => navigate(`/students/${note.studentId}`)}
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-slate-200">{note.title}</p>
+                    <p className="text-xs text-slate-500 mt-0.5 line-clamp-1">
+                      {student?.fullName && <span className="text-indigo-400">{student.fullName}</span>}
+                      {note.content && <span> — {note.content}</span>}
+                    </p>
+                    <p className="text-xs text-slate-600 mt-0.5">{relativeDate(note.createdAt)}</p>
+                  </div>
+                  <Badge variant={priorityVariant(note.priority)}>
+                    {note.priority === 'urgent' ? 'Urgente' : note.priority === 'high' ? 'Alta' : note.priority === 'medium' ? 'Media' : 'Baja'}
+                  </Badge>
                 </div>
-                <Badge variant={priorityVariant(note.priority)}>
-                  {note.priority}
-                </Badge>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </Card>

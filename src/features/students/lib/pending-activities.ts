@@ -17,78 +17,61 @@ export async function getPendingActivities(
   const student = await db.students.get(studentId);
   if (!student) return [];
 
+  const allProgress = await db.progress
+    .where('studentId')
+    .equals(studentId)
+    .toArray();
+
   const syllabus = await db.syllabus
     .where('cohortId')
     .equals(student.cohortId)
     .toArray();
 
-  const progress = await db.progress
-    .where('studentId')
-    .equals(studentId)
-    .toArray();
+  const syllabusByModule = new Map<number, SyllabusModule>();
+  for (const mod of syllabus) {
+    syllabusByModule.set(mod.moduleNumber, mod);
+  }
 
-  const completedActivityNames = new Set(
-    progress.filter(p => p.completed).map(p => p.activityName)
-  );
+  const pendingProgress = allProgress.filter(p => !p.completed);
 
   const pendingActivities: PendingActivity[] = [];
 
-  for (const mod of syllabus) {
-    if (new Date(mod.startDate) > referenceDate) continue;
+  for (const progress of pendingProgress) {
+    const moduleInfo = syllabusByModule.get(progress.moduleNumber || 0);
 
-    const activities = mod.activities || [];
+    const expectedDate = progress.completionDate || moduleInfo?.endDate || '';
 
-    for (const activity of activities) {
-      if (completedActivityNames.has(activity)) continue;
+    const isOverdue = expectedDate !== '' && new Date(expectedDate) < referenceDate;
+    const daysOverdue = isOverdue
+      ? Math.floor((referenceDate.getTime() - new Date(expectedDate).getTime()) / (1000 * 60 * 60 * 24))
+      : 0;
 
-      const activityDate = extractActivityDate(activity, mod);
-      const isOverdue = activityDate !== null && new Date(activityDate) < referenceDate;
-      const daysOverdue = isOverdue
-        ? Math.floor((referenceDate.getTime() - new Date(activityDate!).getTime()) / (1000 * 60 * 60 * 24))
-        : 0;
+    pendingActivities.push({
+      activityName: progress.activityName,
+      moduleName: moduleInfo?.moduleName || `Módulo ${progress.moduleNumber}`,
+      moduleNumber: progress.moduleNumber || 0,
+      expectedDate,
+      isOverdue: isOverdue || false,
+      daysOverdue,
+    });
+  }
 
-      pendingActivities.push({
-        activityName: activity,
-        moduleName: mod.moduleName,
-        moduleNumber: mod.moduleNumber,
-        expectedDate: activityDate || mod.endDate,
-        isOverdue,
-        daysOverdue,
-      });
+  const uniqueMap = new Map<string, PendingActivity>();
+  for (const activity of pendingActivities) {
+    const key = `${activity.moduleNumber}-${activity.activityName}`;
+    if (!uniqueMap.has(key)) {
+      uniqueMap.set(key, activity);
     }
   }
 
-  pendingActivities.sort(
-    (a, b) => new Date(a.expectedDate).getTime() - new Date(b.expectedDate).getTime()
-  );
+  const result = Array.from(uniqueMap.values());
 
-  return pendingActivities;
-}
+  result.sort((a, b) => {
+    if (a.isOverdue && !b.isOverdue) return -1;
+    if (!a.isOverdue && b.isOverdue) return 1;
+    if (a.isOverdue && b.isOverdue) return b.daysOverdue - a.daysOverdue;
+    return new Date(a.expectedDate).getTime() - new Date(b.expectedDate).getTime();
+  });
 
-function extractActivityDate(activityName: string, _module: SyllabusModule): string | null {
-  const dateMatch = activityName.match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);
-  if (dateMatch) {
-    const day = dateMatch[1].padStart(2, '0');
-    const month = dateMatch[2].padStart(2, '0');
-    const year = dateMatch[3];
-    return `${year}-${month}-${day}`;
-  }
-
-  const months: Record<string, number> = {
-    enero: 1, febrero: 2, marzo: 3, abril: 4,
-    mayo: 5, junio: 6, julio: 7, agosto: 8,
-    septiembre: 9, octubre: 10, noviembre: 11, diciembre: 12,
-  };
-
-  const spanishMatch = activityName.match(/(\d{1,2})\s+de\s+(\w+)\s+de\s+(\d{4})/i);
-  if (spanishMatch) {
-    const day = spanishMatch[1].padStart(2, '0');
-    const monthNum = months[spanishMatch[2].toLowerCase()];
-    const year = spanishMatch[3];
-    if (monthNum) {
-      return `${year}-${String(monthNum).padStart(2, '0')}-${day}`;
-    }
-  }
-
-  return null;
+  return result;
 }

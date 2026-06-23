@@ -153,7 +153,7 @@ export const useIngestionStore = create<IngestionState>((set, get) => ({
             stats: result.stats,
           };
         } else if (fileType === 'syllabus' && format === 'xlsx') {
-          const result = await parseSyllabusXLSX(file);
+          const result = await parseSyllabusXLSX(file, cohortId);
           parseResult = {
             success: result.success,
             data: result.data as unknown as Record<string, string>[],

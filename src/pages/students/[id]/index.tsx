@@ -46,6 +46,9 @@ import { formatDate, toISODate } from '@/shared/lib/date';
 import { db } from '@/shared/lib/database';
 import { calculateRisk } from '@/features/risk-engine';
 import { getPendingActivities } from '@/features/students/lib/pending-activities';
+import { NoteTimeline } from '@/features/crm/ui/note-timeline';
+import { NoteForm } from '@/features/crm/ui/note-form';
+import { createNote, updateNote, deleteNote, toggleComplete } from '@/features/crm/api/crm-api';
 import type { Student } from '@/entities/student';
 import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
@@ -71,40 +74,6 @@ function riskLabel(l: RiskOutput['riskLevel']): string {
   if (l === 'high') return 'Alto';
   if (l === 'medium') return 'Medio';
   return 'Bajo';
-}
-
-function noteTypeIcon(type: Note['type']) {
-  switch (type) {
-    case 'alert':
-      return <AlertCircle size={14} strokeWidth={1.5} className="text-rose-400" />;
-    case 'action':
-      return <CheckCircle2 size={14} strokeWidth={1.5} className="text-amber-400" />;
-    case 'context':
-      return <FileText size={14} strokeWidth={1.5} className="text-sky-400" />;
-    default:
-      return <MessageSquare size={14} strokeWidth={1.5} className="text-slate-400" />;
-  }
-}
-
-function noteTypeLabel(type: Note['type']): string {
-  switch (type) {
-    case 'alert':
-      return 'Alerta';
-    case 'action':
-      return 'Acción';
-    case 'context':
-      return 'Contexto';
-    default:
-      return 'General';
-  }
-}
-
-function priorityBadgeVariant(
-  p: Note['priority']
-): 'risk-high' | 'risk-medium' | 'risk-low' | 'info' {
-  if (p === 'urgent' || p === 'high') return 'risk-high';
-  if (p === 'medium') return 'risk-medium';
-  return 'risk-low';
 }
 
 const ATTENDANCE_LABELS: Record<AttendanceRecord['status'], string> = {
@@ -614,9 +583,9 @@ function ProgresoTab({
             />
           </div>
           <div className="space-y-1">
-            {mod.activities.map((act) => (
+            {mod.activities.map((act, i) => (
               <div
-                key={act.name}
+                key={`${mod.moduleNumber}-${i}-${act.name}`}
                 className="flex items-center justify-between py-1.5 px-2 rounded-md hover:bg-slate-800/50 transition-colors"
               >
                 <div className="flex items-center gap-2 min-w-0">
@@ -794,17 +763,8 @@ function DedicacionTab({
 function NotasTab({ studentId }: { studentId: string }) {
   const [notes, setNotes] = useState<Note[]>([]);
   const [loading, setLoading] = useState(true);
-  const [typeFilter, setTypeFilter] = useState<string>('all');
-  const [priorityFilter, setPriorityFilter] = useState<string>('all');
-
-  // New note form
   const [showForm, setShowForm] = useState(false);
-  const [formTitle, setFormTitle] = useState('');
-  const [formContent, setFormContent] = useState('');
-  const [formType, setFormType] = useState<Note['type']>('general');
-  const [formPriority, setFormPriority] = useState<Note['priority']>('medium');
-  const [formDueDate, setFormDueDate] = useState('');
-  const [submitting, setSubmitting] = useState(false);
+  const [editingNote, setEditingNote] = useState<Note | null>(null);
 
   const loadNotes = useCallback(async () => {
     const data = await db.notes
@@ -820,273 +780,85 @@ function NotasTab({ studentId }: { studentId: string }) {
     void loadNotes();
   }, [loadNotes]);
 
-  const filteredNotes = useMemo(() => {
-    return notes.filter((n) => {
-      if (typeFilter !== 'all' && n.type !== typeFilter) return false;
-      if (priorityFilter !== 'all' && n.priority !== priorityFilter) return false;
-      return true;
-    });
-  }, [notes, typeFilter, priorityFilter]);
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!formTitle.trim()) return;
-    setSubmitting(true);
-    const now = new Date().toISOString();
-    const note: Note = {
-      id: `note-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      studentId,
-      type: formType,
-      priority: formPriority,
-      title: formTitle.trim(),
-      content: formContent.trim() || undefined,
-      dueDate: formDueDate || undefined,
-      isCompleted: false,
-      createdAt: now,
-      updatedAt: now,
-    };
-    await db.notes.put(note);
-    toast.success('Nota agregada');
-    setFormTitle('');
-    setFormContent('');
-    setFormType('general');
-    setFormPriority('medium');
-    setFormDueDate('');
+  const handleSave = async (note: Note) => {
+    if (editingNote) {
+      await updateNote(note.id, note);
+    } else {
+      await createNote(note);
+    }
     setShowForm(false);
-    setSubmitting(false);
+    setEditingNote(null);
     void loadNotes();
+  };
+
+  const handleEdit = (note: Note) => {
+    setEditingNote(note);
+    setShowForm(true);
   };
 
   const handleDelete = async (id: string) => {
-    await db.notes.delete(id);
-    toast.success('Nota eliminada');
+    await deleteNote(id);
     void loadNotes();
   };
 
-  const handleToggleComplete = async (note: Note) => {
-    if (note.isCompleted) {
-      await db.notes.update(note.id, {
-        isCompleted: false,
-        completedAt: undefined,
-        updatedAt: new Date().toISOString(),
-      });
-    } else {
-      await db.notes.update(note.id, {
-        isCompleted: true,
-        completedAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      });
-    }
+  const handleToggleComplete = async (id: string, current: boolean) => {
+    await toggleComplete(id, current);
     void loadNotes();
   };
-
-  if (loading) {
-    return (
-      <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <Skeleton key={i} variant="text" lines={2} />
-        ))}
-      </div>
-    );
-  }
 
   return (
     <div className="space-y-4">
       {/* New note button */}
       <div className="flex items-center justify-between">
         <p className="text-sm text-slate-400">
-          {filteredNotes.length} {filteredNotes.length === 1 ? 'nota' : 'notas'}
+          {notes.length} {notes.length === 1 ? 'nota' : 'notas'}
         </p>
         <Button
           variant="primary"
           size="sm"
           leftIcon={<Plus size={16} strokeWidth={1.5} />}
-          onClick={() => setShowForm(true)}
+          onClick={() => { setEditingNote(null); setShowForm(true); }}
         >
           Nueva Nota
         </Button>
       </div>
 
-      {/* Filters */}
-      <div className="flex gap-2">
-        <div className="flex rounded-lg border border-slate-700 bg-slate-800/50 p-0.5">
-          {(['all', 'alert', 'action', 'context', 'general'] as const).map((t) => (
-            <button
-              key={t}
-              onClick={() => setTypeFilter(t)}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
-                typeFilter === t
-                  ? 'bg-slate-700 text-slate-100 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              )}
-            >
-              {t === 'all' ? 'Todas' : noteTypeLabel(t)}
-            </button>
-          ))}
-        </div>
-        <div className="flex rounded-lg border border-slate-700 bg-slate-800/50 p-0.5">
-          {(['all', 'urgent', 'high', 'medium', 'low'] as const).map((p) => (
-            <button
-              key={p}
-              onClick={() => setPriorityFilter(p)}
-              className={cn(
-                'px-2.5 py-1 text-xs font-medium rounded-md transition-colors',
-                priorityFilter === p
-                  ? 'bg-slate-700 text-slate-100 shadow-sm'
-                  : 'text-slate-400 hover:text-slate-200'
-              )}
-            >
-              {p === 'all' ? 'Todas' : p === 'urgent' ? 'Urgente' : p.charAt(0).toUpperCase() + p.slice(1)}
-            </button>
-          ))}
-        </div>
-      </div>
+      {notes.length === 0 && !loading ? (
+        <EmptyState
+          icon={<MessageSquare size={24} strokeWidth={1.5} />}
+          title="Sin notas"
+          description="Aún no hay notas registradas para este estudiante."
+          action={
+            <Button variant="primary" size="sm" leftIcon={<Plus size={16} strokeWidth={1.5} />} onClick={() => { setEditingNote(null); setShowForm(true); }}>
+              Crear primera nota
+            </Button>
+          }
+        />
+      ) : (
+        <NoteTimeline
+          notes={notes}
+          studentsMap={new Map([[studentId, '']])}
+          isLoading={loading}
+          onToggleComplete={handleToggleComplete}
+          onEdit={handleEdit}
+          onDelete={handleDelete}
+        />
+      )}
 
-      {/* Timeline */}
-      <div className="space-y-3">
-        {filteredNotes.length === 0 ? (
-          <EmptyState
-            icon={<MessageSquare size={24} strokeWidth={1.5} />}
-            title="Sin notas"
-            description={
-              notes.length === 0
-                ? 'Aún no hay notas registradas para este estudiante.'
-                : 'No hay notas que coincidan con los filtros.'
-            }
-            action={
-              <Button variant="primary" size="sm" leftIcon={<Plus size={16} strokeWidth={1.5} />} onClick={() => setShowForm(true)}>
-                Crear primera nota
-              </Button>
-            }
-          />
-        ) : (
-          filteredNotes.map((note) => (
-            <div
-              key={note.id}
-              className={cn(
-                'flex items-start gap-3 p-4 rounded-xl border transition-colors',
-                note.isCompleted
-                  ? 'bg-slate-900/50 border-slate-800/50 opacity-60'
-                  : 'bg-slate-900 border-slate-800'
-              )}
-            >
-              <div className="flex items-center justify-center w-8 h-8 rounded-full bg-slate-800 flex-shrink-0 mt-0.5">
-                {noteTypeIcon(note.type)}
-              </div>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <p
-                      className={cn(
-                        'text-sm font-medium',
-                        note.isCompleted ? 'text-slate-500 line-through' : 'text-slate-200'
-                      )}
-                    >
-                      {note.title}
-                    </p>
-                    <div className="flex items-center gap-2 mt-1">
-                      <span className="text-xs text-slate-500">{noteTypeLabel(note.type)}</span>
-                      <Badge variant={priorityBadgeVariant(note.priority)}>{note.priority}</Badge>
-                      <span className="text-xs text-slate-600">{formatDate(note.createdAt)}</span>
-                      {note.dueDate && (
-                        <span className="text-xs text-slate-600">
-                          Vence: {formatDate(note.dueDate)}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-1 flex-shrink-0">
-                    <button
-                      onClick={() => handleToggleComplete(note)}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-emerald-400 hover:bg-slate-800 transition-colors"
-                      aria-label={note.isCompleted ? 'Reabrir nota' : 'Marcar como completada'}
-                    >
-                      <CheckCircle2 size={14} strokeWidth={1.5} />
-                    </button>
-                    <button
-                      onClick={() => handleDelete(note.id)}
-                      className="p-1.5 rounded-md text-slate-500 hover:text-rose-400 hover:bg-slate-800 transition-colors"
-                      aria-label="Eliminar nota"
-                    >
-                      <Trash2 size={14} strokeWidth={1.5} />
-                    </button>
-                  </div>
-                </div>
-                {note.content && (
-                  <p className="text-sm text-slate-400 mt-2 whitespace-pre-wrap">{note.content}</p>
-                )}
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* New note modal */}
+      {/* Create/Edit note modal */}
       <Modal
         open={showForm}
-        onOpenChange={setShowForm}
-        title="Nueva Nota"
+        onOpenChange={(open) => { if (!open) { setShowForm(false); setEditingNote(null); } }}
+        title={editingNote ? 'Editar Nota' : 'Nueva Nota'}
         size="lg"
-        footer={
-          <>
-            <Button variant="ghost" onClick={() => setShowForm(false)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" onClick={handleSubmit} isLoading={submitting} disabled={!formTitle.trim()}>
-              Guardar Nota
-            </Button>
-          </>
-        }
       >
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <Input
-            label="Título"
-            placeholder="Título de la nota"
-            value={formTitle}
-            onChange={(e) => setFormTitle(e.target.value)}
-            required
-          />
-          <div className="flex flex-col gap-1.5">
-            <label className="text-sm font-medium text-slate-400">Contenido</label>
-            <textarea
-              className="w-full rounded-lg bg-slate-800/50 border border-slate-700 text-slate-100 placeholder:text-slate-500 text-sm px-3 py-2 h-24 resize-none transition-colors focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/30"
-              placeholder="Descripción detallada..."
-              value={formContent}
-              onChange={(e) => setFormContent(e.target.value)}
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <Select
-              label="Tipo"
-              value={formType}
-              onValueChange={(v) => setFormType(v as Note['type'])}
-              options={[
-                { value: 'general', label: 'General' },
-                { value: 'context', label: 'Contexto' },
-                { value: 'action', label: 'Acción' },
-                { value: 'alert', label: 'Alerta' },
-              ]}
-            />
-            <Select
-              label="Prioridad"
-              value={formPriority}
-              onValueChange={(v) => setFormPriority(v as Note['priority'])}
-              options={[
-                { value: 'low', label: 'Baja' },
-                { value: 'medium', label: 'Media' },
-                { value: 'high', label: 'Alta' },
-                { value: 'urgent', label: 'Urgente' },
-              ]}
-            />
-          </div>
-          <Input
-            label="Fecha de vencimiento (opcional)"
-            type="date"
-            value={formDueDate}
-            onChange={(e) => setFormDueDate(e.target.value)}
-          />
-        </form>
+        <NoteForm
+          students={[]}
+          initialNote={editingNote}
+          preselectedStudentId={studentId}
+          onSave={handleSave}
+          onCancel={() => { setShowForm(false); setEditingNote(null); }}
+        />
       </Modal>
     </div>
   );
@@ -1251,9 +1023,9 @@ export function StudentDetailPage() {
           return;
         }
 
-        const cohortSyllabus = allSyllabus.filter(
-          (m) => m.cohortId === studentData.cohortId
-        );
+        const cohortSyllabus = allSyllabus
+          .filter((m) => m.cohortId === studentData.cohortId)
+          .sort((a, b) => a.moduleNumber - b.moduleNumber);
 
         let riskResult: RiskOutput | null = null;
         if (studentData.status === 'active') {
