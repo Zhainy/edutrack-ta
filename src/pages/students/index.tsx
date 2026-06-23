@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   flexRender,
@@ -9,7 +9,9 @@ import {
   useReactTable,
   type ColumnDef,
   type SortingState,
+  type RowSelectionState,
 } from '@tanstack/react-table';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Users,
   Search,
@@ -21,6 +23,8 @@ import {
   AlertTriangle,
   ExternalLink,
   Trash2,
+  CheckSquare,
+  Square,
 } from 'lucide-react';
 import { Card } from '@/shared/ui/card';
 import { Badge } from '@/shared/ui/badge';
@@ -30,11 +34,13 @@ import { Skeleton } from '@/shared/ui/skeleton';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { useDebounce } from '@/shared/hooks';
 import { db } from '@/shared/lib/database';
-import { Modal } from '@/shared/ui/modal';
 import { toast } from '@/shared/ui/toast';
+import { cn } from '@/shared/lib/utils';
 import { calculateRisk } from '@/features/risk-engine';
-import { deleteStudent, getPendingActivities } from '@/features/students';
+import { deleteStudent, bulkDeleteStudents, getPendingActivities } from '@/features/students';
 import { StatusSelector } from '@/features/students/ui/status-selector';
+import { AdvancedFilters, type StudentFilters } from '@/features/students/ui/advanced-filters';
+import { DeleteStudentModal } from '@/features/students/ui/delete-student-modal';
 import type { Student } from '@/entities/student';
 import type { RiskOutput } from '@/features/risk-engine';
 
@@ -62,18 +68,6 @@ const RISK_OPTIONS: { value: RiskFilter; label: string }[] = [
   { value: 'medium', label: 'Medio' },
   { value: 'low', label: 'Bajo' },
 ];
-
-function riskBadgeVariant(level: RiskOutput['riskLevel']): 'risk-high' | 'risk-medium' | 'risk-low' {
-  if (level === 'high') return 'risk-high';
-  if (level === 'medium') return 'risk-medium';
-  return 'risk-low';
-}
-
-function riskLabel(level: RiskOutput['riskLevel']): string {
-  if (level === 'high') return 'Alto';
-  if (level === 'medium') return 'Medio';
-  return 'Bajo';
-}
 
 interface FilterBarProps {
   searchValue: string;
@@ -138,6 +132,112 @@ function FilterBar({
   );
 }
 
+function VirtualizedTable({ table }: { table: ReturnType<typeof useReactTable<StudentWithRisk>> }) {
+  const parentRef = useRef<HTMLDivElement>(null);
+  const tableRef = useRef<HTMLTableElement>(null);
+  const rows = table.getRowModel().rows;
+  const headerGroups = table.getHeaderGroups();
+
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => parentRef.current,
+    estimateSize: () => 60,
+    overscan: 10,
+  });
+
+  return (
+    <div className="overflow-x-auto" style={{ tableLayout: 'fixed' as const }}>
+      <table className="w-full" style={{ tableLayout: 'fixed' as const }}>
+        <thead className="bg-slate-900/50">
+          {headerGroups.map((headerGroup) => (
+            <tr key={headerGroup.id} className="border-b border-slate-800">
+              {headerGroup.headers.map((header) => (
+                <th
+                  key={header.id}
+                  className={cn(
+                    'px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider',
+                    header.column.getCanSort() &&
+                      'cursor-pointer select-none hover:text-slate-300 transition-colors'
+                  )}
+                  onClick={header.column.getToggleSortingHandler()}
+                  style={{ width: `${header.getSize()}px`, minWidth: `${header.getSize()}px` }}
+                >
+                  <div className="flex items-center gap-1">
+                    {flexRender(header.column.columnDef.header, header.getContext())}
+                    {header.column.getCanSort() && (
+                      <span className="text-slate-600 flex-shrink-0">
+                        {header.column.getIsSorted() === 'asc' ? (
+                          <ChevronUp size={14} strokeWidth={1.5} />
+                        ) : header.column.getIsSorted() === 'desc' ? (
+                          <ChevronDown size={14} strokeWidth={1.5} />
+                        ) : (
+                          <ChevronsUpDown size={14} strokeWidth={1.5} />
+                        )}
+                      </span>
+                    )}
+                  </div>
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+      </table>
+      <div
+        ref={parentRef}
+        className="overflow-auto"
+        style={{ height: `${Math.min(rows.length * 60, 480)}px` }}
+      >
+        <div
+          style={{
+            height: `${rowVirtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          <table
+            ref={tableRef}
+            className="w-full"
+            style={{ tableLayout: 'fixed' as const, position: 'absolute', top: 0, left: 0 }}
+          >
+            <tbody>
+              {rowVirtualizer.getVirtualItems().map((virtualRow, index) => {
+                const row = rows[virtualRow.index];
+                const isLast = index === rowVirtualizer.getVirtualItems().length - 1;
+                return (
+                  <tr
+                    key={row.id}
+                    className={cn(
+                      'hover:bg-slate-800/30 transition-colors',
+                      !isLast && 'border-b border-slate-800/50',
+                      row.getIsSelected() && 'bg-indigo-500/5'
+                    )}
+                    style={{ height: `${virtualRow.size}px` }}
+                  >
+                    {row.getVisibleCells().map((cell) => {
+                      const colId = cell.column.id;
+                      const col = headerGroups[0]?.headers.find((h) => h.id === colId);
+                      const width = col ? col.getSize() : 150;
+                      return (
+                        <td
+                          key={cell.id}
+                          className="px-4 py-3 text-sm truncate"
+                          style={{ width: `${width}px`, minWidth: `${width}px`, maxWidth: `${width}px` }}
+                        >
+                          {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                        </td>
+                      );
+                    })}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export function StudentsPage() {
   const [data, setData] = useState<StudentWithRisk[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -149,7 +249,10 @@ export function StudentsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [riskFilter, setRiskFilter] = useState<RiskFilter>('all');
   const [sorting, setSorting] = useState<SortingState>([{ id: 'fullName', desc: false }]);
+  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
+  const [advancedFilters, setAdvancedFilters] = useState<StudentFilters>({});
   const [deleteTarget, setDeleteTarget] = useState<Student | null>(null);
+  const [showBulkDelete, setShowBulkDelete] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDelete = async () => {
@@ -160,6 +263,22 @@ export function StudentsPage() {
       setData((prev) => prev.filter((item) => item.student.id !== deleteTarget.id));
       toast.success('Estudiante eliminado', `${deleteTarget.fullName} ha sido eliminado.`);
       setDeleteTarget(null);
+    } catch (err) {
+      toast.error('Error al eliminar', err instanceof Error ? err.message : 'Error desconocido');
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    setIsDeleting(true);
+    try {
+      const ids = Object.keys(rowSelection);
+      await bulkDeleteStudents(ids);
+      setData((prev) => prev.filter((item) => !ids.includes(item.student.id)));
+      toast.success(`${ids.length} estudiantes eliminados`);
+      setRowSelection({});
+      setShowBulkDelete(false);
     } catch (err) {
       toast.error('Error al eliminar', err instanceof Error ? err.message : 'Error desconocido');
     } finally {
@@ -240,6 +359,28 @@ export function StudentsPage() {
         if (risk.riskLevel !== riskFilter) return false;
       }
 
+      if (advancedFilters.status && student.status !== advancedFilters.status) return false;
+      if (advancedFilters.riskLevel) {
+        if (!risk) return false;
+        if (risk.riskLevel !== advancedFilters.riskLevel) return false;
+      }
+      if (advancedFilters.minAttendance !== undefined) {
+        const rate = risk?.metrics.attendanceRate ?? 0;
+        if (rate < advancedFilters.minAttendance) return false;
+      }
+      if (advancedFilters.maxAttendance !== undefined) {
+        const rate = risk?.metrics.attendanceRate ?? 0;
+        if (rate > advancedFilters.maxAttendance) return false;
+      }
+      if (advancedFilters.minHours !== undefined) {
+        const hours = risk?.metrics.completionRate ?? 0;
+        if (hours < advancedFilters.minHours) return false;
+      }
+      if (advancedFilters.maxHours !== undefined) {
+        const hours = risk?.metrics.completionRate ?? 0;
+        if (hours > advancedFilters.maxHours) return false;
+      }
+
       if (debouncedSearch) {
         const q = debouncedSearch.toLowerCase();
         const nameMatch = student.fullName.toLowerCase().includes(q);
@@ -249,13 +390,50 @@ export function StudentsPage() {
 
       return true;
     });
-  }, [data, statusFilter, riskFilter, debouncedSearch]);
+  }, [data, statusFilter, riskFilter, advancedFilters, debouncedSearch]);
 
   const columns = useMemo<ColumnDef<StudentWithRisk>[]>(
     () => [
       {
+        id: 'select',
+        header: ({ table }) => (
+          <button
+            type="button"
+            onClick={() => table.toggleAllPageRowsSelected()}
+            className="flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            aria-label="Seleccionar todos"
+          >
+            {table.getIsAllPageRowsSelected() ? (
+              <CheckSquare size={16} strokeWidth={1.5} className="text-indigo-400" />
+            ) : (
+              <Square size={16} strokeWidth={1.5} />
+            )}
+          </button>
+        ),
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => row.toggleSelected()}
+            className="flex items-center justify-center w-8 h-8 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors"
+            aria-label={row.getIsSelected() ? 'Deseleccionar' : 'Seleccionar'}
+          >
+            {row.getIsSelected() ? (
+              <CheckSquare size={16} strokeWidth={1.5} className="text-indigo-400" />
+            ) : (
+              <Square size={16} strokeWidth={1.5} />
+            )}
+          </button>
+        ),
+        enableSorting: false,
+        size: 50,
+        minSize: 50,
+        maxSize: 50,
+      },
+      {
         id: 'fullName',
         header: 'Nombre',
+        size: 220,
+        minSize: 180,
         accessorFn: (row) => row.student.fullName,
         cell: ({ row }) => (
           <Link
@@ -287,6 +465,9 @@ export function StudentsPage() {
       {
         id: 'status',
         header: 'Estado',
+        size: 130,
+        minSize: 120,
+        maxSize: 140,
         accessorFn: (row) => row.student.status,
         cell: ({ row }) => (
           <StatusSelector
@@ -309,32 +490,29 @@ export function StudentsPage() {
       {
         id: 'riskScore',
         header: 'Riesgo',
+        size: 150,
+        minSize: 140,
         accessorFn: (row) => row.risk?.riskScore ?? null,
         cell: ({ row }) => {
           const risk = row.original.risk;
           if (!risk) return <span className="text-xs text-slate-600">—</span>;
           return (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 flex-1 min-w-[80px]">
-                <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      risk.riskLevel === 'high'
-                        ? 'bg-rose-500'
-                        : risk.riskLevel === 'medium'
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${risk.riskScore}%` }}
-                  />
-                </div>
-                <span className="text-xs font-mono text-slate-400 w-8 text-right">
-                  {risk.riskScore}
-                </span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    risk.riskLevel === 'high'
+                      ? 'bg-rose-500'
+                      : risk.riskLevel === 'medium'
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${risk.riskScore}%` }}
+                />
               </div>
-              <Badge variant={riskBadgeVariant(risk.riskLevel)}>
-                {riskLabel(risk.riskLevel)}
-              </Badge>
+              <span className="text-xs font-mono text-slate-500 w-8 text-right flex-shrink-0">
+                {risk.riskScore}
+              </span>
             </div>
           );
         },
@@ -344,6 +522,8 @@ export function StudentsPage() {
       {
         id: 'attendanceRate',
         header: 'Asistencia',
+        size: 100,
+        minSize: 80,
         accessorFn: (row) => row.risk?.metrics.attendanceRate ?? null,
         cell: ({ row }) => {
           const rate = row.original.risk?.metrics.attendanceRate;
@@ -359,6 +539,8 @@ export function StudentsPage() {
       {
         id: 'completionRate',
         header: 'Horas',
+        size: 80,
+        minSize: 70,
         accessorFn: (row) => row.risk?.metrics.completionRate ?? null,
         cell: ({ row }) => {
           const rate = row.original.risk?.metrics.completionRate;
@@ -374,6 +556,8 @@ export function StudentsPage() {
       {
         id: 'pending',
         header: 'Pendientes',
+        size: 120,
+        minSize: 110,
         accessorFn: (row) => row.overdueCount,
         cell: ({ row }) => {
           const { pendingCount, overdueCount } = row.original;
@@ -390,6 +574,8 @@ export function StudentsPage() {
       {
         id: 'tags',
         header: 'Tags',
+        size: 140,
+        minSize: 100,
         accessorFn: (row) => row.student.tags,
         cell: ({ row }) => {
           const tags = row.original.student.tags;
@@ -413,6 +599,10 @@ export function StudentsPage() {
       {
         id: 'actions',
         header: '',
+        size: 80,
+        minSize: 80,
+        maxSize: 80,
+        enableSorting: false,
         cell: ({ row }) => (
           <div className="flex items-center gap-1">
             <Link
@@ -432,7 +622,6 @@ export function StudentsPage() {
             </button>
           </div>
         ),
-        enableSorting: false,
       },
     ],
     []
@@ -443,12 +632,15 @@ export function StudentsPage() {
     columns,
     state: {
       sorting,
+      rowSelection,
     },
     onSortingChange: setSorting,
+    onRowSelectionChange: setRowSelection,
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
     getPaginationRowModel: getPaginationRowModel(),
+    enableRowSelection: true,
     initialState: {
       pagination: {
         pageSize: 15,
@@ -483,14 +675,22 @@ export function StudentsPage() {
       </div>
 
       {/* Filters */}
-      <FilterBar
-        searchValue={searchInput}
-        onSearchChange={setSearchInput}
-        statusFilter={statusFilter}
-        onStatusFilterChange={setStatusFilter}
-        riskFilter={riskFilter}
-        onRiskFilterChange={setRiskFilter}
-      />
+      <div className="flex items-center gap-3">
+        <div className="flex-1">
+          <FilterBar
+            searchValue={searchInput}
+            onSearchChange={setSearchInput}
+            statusFilter={statusFilter}
+            onStatusFilterChange={setStatusFilter}
+            riskFilter={riskFilter}
+            onRiskFilterChange={setRiskFilter}
+          />
+        </div>
+        <AdvancedFilters
+          onApply={setAdvancedFilters}
+          onClear={() => setAdvancedFilters({})}
+        />
+      </div>
 
       {/* Table */}
       <Card variant="default" padding="none" className="overflow-hidden">
@@ -511,60 +711,7 @@ export function StudentsPage() {
             }
           />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                {table.getHeaderGroups().map((headerGroup) => (
-                  <tr key={headerGroup.id} className="border-b border-slate-800">
-                    {headerGroup.headers.map((header) => (
-                      <th
-                        key={header.id}
-                        className={`px-4 py-3 text-left text-xs font-medium text-slate-500 uppercase tracking-wider ${
-                          header.column.getCanSort()
-                            ? 'cursor-pointer select-none hover:text-slate-300 transition-colors'
-                            : ''
-                        }`}
-                        onClick={header.column.getToggleSortingHandler()}
-                        style={{ width: header.getSize() !== 150 ? header.getSize() : undefined }}
-                      >
-                        <div className="flex items-center gap-1">
-                          {flexRender(
-                            header.column.columnDef.header,
-                            header.getContext()
-                          )}
-                          {header.column.getCanSort() && (
-                            <span className="text-slate-600">
-                              {header.column.getIsSorted() === 'asc' ? (
-                                <ChevronUp size={14} strokeWidth={1.5} />
-                              ) : header.column.getIsSorted() === 'desc' ? (
-                                <ChevronDown size={14} strokeWidth={1.5} />
-                              ) : (
-                                <ChevronsUpDown size={14} strokeWidth={1.5} />
-                              )}
-                            </span>
-                          )}
-                        </div>
-                      </th>
-                    ))}
-                  </tr>
-                ))}
-              </thead>
-              <tbody className="divide-y divide-slate-800/50">
-                {table.getRowModel().rows.map((row) => (
-                  <tr
-                    key={row.id}
-                    className="hover:bg-slate-800/30 transition-colors"
-                  >
-                    {row.getVisibleCells().map((cell) => (
-                      <td key={cell.id} className="px-4 py-3 text-sm whitespace-nowrap">
-                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <VirtualizedTable table={table} />
         )}
       </Card>
 
@@ -610,29 +757,43 @@ export function StudentsPage() {
         </div>
       )}
 
-      {/* Delete confirmation modal */}
-      <Modal
+      {/* Bulk delete bar */}
+      {Object.keys(rowSelection).length > 0 && (
+        <div className="flex items-center justify-between px-4 py-3 rounded-lg bg-rose-500/10 border border-rose-500/20">
+          <p className="text-sm text-rose-300">
+            {Object.keys(rowSelection).length} estudiante{Object.keys(rowSelection).length > 1 ? 's' : ''} seleccionado
+            {Object.keys(rowSelection).length > 1 ? 's' : ''}
+          </p>
+          <Button
+            variant="danger"
+            size="sm"
+            leftIcon={<Trash2 size={14} strokeWidth={1.5} />}
+            onClick={() => setShowBulkDelete(true)}
+          >
+            Eliminar seleccionados
+          </Button>
+        </div>
+      )}
+
+      {/* Delete single confirmation */}
+      <DeleteStudentModal
         open={deleteTarget !== null}
         onOpenChange={(open) => { if (!open) setDeleteTarget(null); }}
-        title="Eliminar estudiante"
-        description={`¿Estás seguro de eliminar a "${deleteTarget?.fullName}"?`}
-        size="sm"
-        footer={
-          <>
-            <Button variant="ghost" size="sm" onClick={() => setDeleteTarget(null)} disabled={isDeleting}>
-              Cancelar
-            </Button>
-            <Button variant="danger" size="sm" onClick={handleDelete} isLoading={isDeleting}>
-              Eliminar
-            </Button>
-          </>
-        }
-      >
-        <p className="text-sm text-slate-400">
-          Esta acción no se puede deshacer. Se eliminarán todos los registros asociados
-          (asistencia, progreso, dedicación y notas).
-        </p>
-      </Modal>
+        studentName={deleteTarget?.fullName ?? ''}
+        onConfirm={handleDelete}
+        isLoading={isDeleting}
+      />
+
+      {/* Bulk delete confirmation */}
+      <DeleteStudentModal
+        open={showBulkDelete}
+        onOpenChange={setShowBulkDelete}
+        studentName=""
+        isBulk
+        count={Object.keys(rowSelection).length}
+        onConfirm={handleBulkDelete}
+        isLoading={isDeleting}
+      />
     </div>
   );
 }

@@ -31,3 +31,14 @@
     display: none;
   }
 }
+
+@layer base {
+  table {
+    table-layout: fixed;
+  }
+
+  th, td {
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+}

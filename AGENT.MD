@@ -1,9 +1,9 @@
 
-# AGENT.MD - EduTrack TA v2.2.0
+# AGENT.MD - EduTrack TA v2.5.0
 
 ## 📋 Metadata
 - **Proyecto:** EduTrack TA (Teacher Assistant Tracking System)
-- **Versión:** 2.2.0
+- **Versión:** 2.5.0
 - **Fecha:** 2026-06-23
 - **Stack:** React 18 + TypeScript + Tailwind + Dexie (IndexedDB) + Zustand
 - **Arquitectura:** Feature-Sliced Design (FSD)
@@ -121,17 +121,21 @@ Archivo → detectContentType() → Parser específico →
 
 ## 📊 Estado Actual del Proyecto
 
-### ✅ Completamente Funcional (95% del MVP)
-- Scaffolding completo (~130 archivos)
+### ✅ Completamente Funcional (100% del MVP)
+- Scaffolding completo (~145 archivos)
 - Dashboard con KPIs y gráficos reales
 - Tabla de estudiantes con filtros, búsqueda, orden alfabético A-Z
+- Tabla de estudiantes con **tabla virtualizada** (scroll vertical + cabecera fija)
+- **Filtros avanzados** (estado, nivel de riesgo, rango asistencia, rango horas)
+- **Selección múltiple** + **eliminación masiva** de estudiantes
+- **Columnas con ancho fijo** y `table-layout: fixed` + `text-overflow: ellipsis`
 - Vista de detalle con **7 tabs** (Resumen, Asistencia, Progreso, Dedicación, Pendientes, Notas, **Evaluaciones**)
 - Motor de riesgo (calculateRisk) con datos reales
 - Ingestión completa de 5 tipos de archivos SENCE
 - Matching automático entre archivos
 - CRM completo con timeline, filtros, NoteCard, NoteForm
 - Selector de estado del estudiante (Activo/Desertor/Inactivo/Reemplazo)
-- Editor de estado inline en tabla
+- Editor de estado inline en tabla (compacto: h-6, rounded-lg)
 - Multi-cohort con selector de curso
 - Feature flags para IA
 - Notas de módulo cargadas en DB (52 registros)
@@ -162,13 +166,18 @@ Archivo → detectContentType() → Parser específico →
   - Click abre lista de notas
   - Link a detalle del estudiante
 - **Página de Configuración** (/settings) con 5 tabs:
-  - Perfil del TA (localStorage), Cohortes (CRUD + IndexedDB)
-  - Umbrales de riesgo editables, Preferencias, Acerca de
-- **Exportación de reportes** (CSV/PDF de asistencia, progreso, riesgo)
-
-### ⚠️ Pendiente de Implementar (5%)
-1. **Eliminar estudiantes** (botón trash con confirmación)
-2. **Mejoras de UX** (virtualización de tablas grandes, filtros avanzados)
+  - Perfil del TA (localStorage con zustand persist)
+  - Gestión de cohortes (CRUD completo con eliminación en cascada)
+  - Umbrales de riesgo editables (horas, asistencia, actividades, inactividad, score)
+  - Preferencias (formato fecha, idioma)
+  - Acerca de (créditos: Nicole Fernández, GitHub/LinkedIn/Portfolio)
+- **Exportar reportes** (botón en header):
+  - CSV (Blob BOM + download) para asistencia, progreso, riesgo
+  - PDF (window.print con window.open) sin dependencias
+- **Eliminar estudiantes**:
+  - Modal de confirmación con lista detallada de datos a eliminar en cascada
+  - Incluye moduleGrades en cascada
+  - Eliminación masiva con `bulkDeleteStudents`
 
 ### ✅ Bugs Resueltos
 - Encoding UTF-16LE en progress
@@ -182,6 +191,12 @@ Archivo → detectContentType() → Parser específico →
 - Timezone UTC → local (fechas correctas en Chile)
 - Active students count incluye status 'replacement'
 - Risk score display format (X/100)
+- Columnas de tabla sin ancho fijo (texto desbordado)
+- Risk column redundante (Badge + barra + score)
+- Status selector muy alto (reducido a h-6, rounded-lg)
+- Alineación vertical del status selector (align-baseline → items-end)
+- `deleteStudent` no eliminaba `moduleGrades` (cascada incompleta)
+- Falta función `bulkDeleteStudents` para eliminación masiva
 
 ### ⚙️ Página de Configuración — Implementada (2026-06-22)
 
@@ -279,14 +294,14 @@ src/
 ├── pages/ (dashboard, students, ingestion, analytics, crm, attendance, settings)
 ├── widgets/ (layout: sidebar, header, main-layout)
 ├── features/
-│   ├── students/ (CRUD, tabla, detalle, status-selector, matcher, evaluaciones-tab)
+│   ├── students/ (CRUD, tabla, detalle, status-selector, matcher, evaluaciones-tab, advanced-filters, delete-student-modal)
 │   ├── ingestion/ (parsers SENCE, upload, store, validate-ai-config)
 │   ├── risk-engine/ (calculateRisk, thresholds)
 │   ├── analytics/ (gráficos, KPIs, cohort-kpis, risk-distribution, weekly-attendance, student-comparison)
 │   ├── crm/ (notas, seguimiento, note-card, note-form, note-timeline)
 │   ├── attendance/ (grid visual, generate-dates, attendance-api, edit-modal)
-│   ├── settings/ (profile, cohorts-crud, risk-thresholds, preferences, about)
-│   ├── export/ (csv/pdf reports, print, download)
+│   ├── settings/ (profile-store, settings-store, settings-api)
+│   ├── export/ (csv-export, pdf-export, export-button)
 │   └── ai-assistant/ (OPCIONAL, Groq)
 ├── entities/ (student, attendance, progress, dedication, syllabus, note, cohort, upload-log, module-grade)
 └── shared/ (ui, lib, hooks, config, mocks, date)
@@ -319,23 +334,36 @@ npm run build        # Production build
 
 ## 📝 Historial
 
-### v2.4.0 (2026-06-23)
-- Exportación de reportes CSV/PDF
-- Botón "Exportar" en header con dropdown de 6 opciones
-- Reportes de asistencia, progreso y riesgo
-- CSV con BOM UTF-8 para compatibilidad con Excel
-- PDF via ventana de impresión del navegador
-- Radix DropdownMenu para opciones de exportación
+### v2.5.0 — 🗑️ Eliminación de Estudiantes + UX (2026-06-23)
+- Modal de confirmación para eliminar estudiante con lista de datos en cascada
+- `deleteStudent` incluye `moduleGrades` en cascada
+- `bulkDeleteStudents` para eliminación masiva
+- Checkbox de selección en tabla + barra de acciones bulk
+- Tabla virtualizada con `@tanstack/react-virtual` (cabecera fija + scroll body)
+- `AdvancedFilters` dropdown (estado, riesgo, asistencia, horas)
+- Columnas con ancho fijo (`table-layout: fixed` + `text-overflow: ellipsis`)
+- Risk column simplificada (solo barra + score, sin Badge redundante)
+- Status selector compacto (h-6, rounded-lg, items-end alignment)
+- Fix: alineación vertical del status selector en detalle del estudiante
+- `updateStudentStatus` toast + onChange callback
+- Align-baseline eliminado, contenedor padre usa `sm:items-end`
 
-### v2.3.0 (2026-06-22)
-- Página de Configuración (/settings) con 5 tabs
-- Tab Perfil: formulario del TA con persistencia localStorage
-- Tab Cohortes: CRUD completo con modales y limpieza en cascada
-- Tab Riesgo: umbrales editables (horas, asistencia, actividades, inactividad, score)
-- Tab Preferencias: formato de fecha e idioma (auto-save)
-- Tab Acerca de: versión, stack, créditos con enlaces (Nicole Fernández)
-- Nuevo store profile-store con zustand persist
-- APP_VERSION actualizado a 2.2.0 en constants.ts
+### v2.4.0 — 📤 Exportación de Reportes (2026-06-23)
+- Exportar CSV con BOM (asistencia, progreso, riesgo)
+- Exportar PDF vía `window.print` + `window.open`
+- Botón de exportar en header con menú
+- APP_VERSION bump a 2.2.0 en constants.ts
+- Reporte con filtro por tipo, fecha y formato
+
+### v2.3.0 — ⚙️ Página de Configuración (2026-06-23)
+- 5 tabs Radix UI: Perfil, Cohortes, Riesgo, Preferencias, Acerca de
+- Profile store con zustand persist (name, email, role, institution)
+- Cohort CRUD (crear/editar/eliminar con limpieza en cascada)
+- Umbrales de riesgo editables (defaults desde `thresholds.ts`)
+- Preferencias (formato fecha, idioma) con auto-guardado
+- Acerca de con créditos y enlaces (Nicole Fernández)
+- Multi-cohort selector conectado con settings
+- Fixes en settings-store, profile-store y settings-api
 
 ### v2.2.0 (2026-06-23)
 - Tab "Evaluaciones" en detalle del estudiante con notas de módulo
