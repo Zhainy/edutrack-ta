@@ -1,81 +1,99 @@
-# AGENT.MD - EduTrack TA v2.0
+# AGENT.MD - EduTrack TA v2.1.0
 
 ## 📋 Metadata
 - **Proyecto:** EduTrack TA (Teacher Assistant Tracking System)
-- **Versión:** 2.0.0
+- **Versión:** 2.1.0
+- **Fecha:** 2026-06-23
 - **Stack:** React 18 + TypeScript + Tailwind + Dexie (IndexedDB) + Zustand
 - **Arquitectura:** Feature-Sliced Design (FSD)
 - **Costo:** $0 (capa gratuita, sin tarjeta de crédito)
 - **IA:** Opcional (Groq free tier, sin fallback)
 - **Notificaciones:** Solo in-app (Sonner toasts)
+- **Cohorte activa:** RTD-24-01-06-0021-4 (DESARROLLO DE APLICACIONES FRONT-END TRAINEE V2.0)
+- **Estudiantes:** 27 (25 activos, 2 desertores, 2 reemplazos)
+- **Duración:** 14/5/2026 - 18/8/2026 (438 horas, 9 módulos, 66 clases)
 
 ---
 
 ## 🎯 Problema que resuelve
 Herramienta para Teacher Assistants de SENCE que:
-- Carga datos reales de plataforma SENCE (dedication, progress, cronograma)
-- Calcula riesgo de deserción/reprobación
-- Permite seguimiento CRM (notas, alertas)
+- Carga datos reales de plataforma SENCE (dedication, progress, cronograma, asistencia)
+- Calcula riesgo de deserción/reprobación en tiempo real
+- Permite seguimiento CRM (notas, alertas, comentarios de asistencia)
 - Visualiza métricas por cohorte/curso
+- Registra asistencia de forma interactiva (editor con click)
 
 ---
 
 ## 🗂️ Estructura REAL de Archivos SENCE
 
-### 1. Dedication (XLSX) - `*_dedication.xlsx`
-```
-Row 0: Metadata ("Dedicación al curso")
-Row 1: Empty
-Row 2: Headers (Nombre | Apellido(s) | Grupo | Dedicación al curso (minutos) | Dedicación al curso | Conexiones por día)
-Row 3+: Datos de estudiantes
-```
-- **Parser:** `features/ingestion/lib/xlsx-parser.ts` → `parseDedicationXLSX()`
-- **Slice:** `rawData.slice(3)` (NO 8 como asumíamos antes)
+### 1. Archivo Principal: `RTD-24-01-06-0021-4.xlsx`
+Contiene **5 hojas**:
+
+#### Hoja "Lista" (Estudiantes)
+- Fila 0: Código curso + nombre
+- Fila 1: Headers (Rut | Nombre | Contacto | Correo | Teléfono | Observaciones)
+- Filas 2+: 27 estudiantes
+- Campos especiales en Observaciones: "DESERTOR 25/05", "REEMPLAZO 29/05", "SUBSIDIO DE CUIDADO", "Ingreso 18/05"
+
+#### Hoja "Notas" (Evaluaciones de Módulo)
+- Columna A: Nombre estudiante
+- Columnas B-I: Módulo 1 a Módulo 8 (notas: 7, 6.3, 5.6, PENDIENTE, -)
+- Headers tienen comentarios con fechas de envío ("Enviadas 22/05")
+
+#### Hojas "Mayo", "Junio", "Julio", "Agosto" (Asistencia)
+- Fila 0: Headers con días del mes (4, 5, 6, 7, 8, 11, 12...)
+- Columna A: número fila
+- Columna B: nombre estudiante
+- Columnas C+: estados (P/A/X) con comentarios threaded
+- Última fila: conteo de asistentes
+
+**Estados:** P (Presente), A (Ausente), X (Justificado/Reemplazo)
+
+### 2. Dedication: `RTD-24-01-06-0021-4_dedication.xlsx`
+- Filas 0-1: Metadata (Desde/Hasta/Tiempo transcurrido)
+- Fila 2: Headers (Nombre | Apellido(s) | Grupo | Minutos | Texto | Conexiones/día)
+- Filas 3+: 36 estudiantes (incluye algunos que NO están en la lista oficial)
 - **Conversión:** minutos / 60 = horas
-- **Match:** Por nombre completo (fuzzy match contra estudiantes)
 
-### 2. Progress (CSV) - `progress.*.csv`
-```
-Encoding: UTF-16LE con BOM (¡CRÍTICO!)
-Col 0: Nombre estudiante (SIN header)
-Col 1: Email
-Col 2+: Pares [status, date] por actividad
-```
-- **Parser:** `features/ingestion/lib/csv-parser.ts` → `parseProgressCSV()`
-- **Header:** `false` (no hay headers)
-- **Encoding:** Auto-detect UTF-16LE BOM
-- **Status:** "Finalizado (ha alcanzado...)", "Finalizado (no ha alcanzado...)", "Finalizado", "No finalizado", ""
-- **Fechas:** Español "jueves, 14 de mayo de 2026, 19:43"
+### 3. Progress: `progress.rtd-24-01-06-0021-4.csv`
+- **Encoding:** UTF-16LE con BOM (¡CRÍTICO!)
+- Col 0: Nombre estudiante
+- Col 1: Email
+- Col 2+: Pares [estado, fecha] por actividad
+- Estados: "Finalizado (ha alcanzado...)", "Finalizado (no ha alcanzado...)", "Finalizado", "No finalizado"
+- Fechas en español: "jueves, 14 de mayo de 2026, 19:43"
+- ~214 actividades por estudiante
 
-### 3. Cronograma/Syllabus (XLSX) - `CRONOGRAMA*.xlsx`
-```
-Rows 1-9: Metadata (CURSO, CÓDIGO, HORAS, REGIÓN, INICIO, TÉRMINO, HORARIO, RELATOR)
-Rows 13-21: Resumen M1-M9 (horas sync/async)
-Row 27: Headers (NOMBRE DEL MODULO | APRENDIZAJES | DIA | CANTIDAD SINCRONICAS | HORAS ASINCRONICAS | FECHA | horario)
-Row 28+: Datos de clases (66 clases totales)
-```
-- **Parser:** `features/ingestion/lib/syllabus-parser.ts` → `parseSyllabusXLSX()`
-- **9 módulos, 438 horas totales**
-- **Match:** Por código de curso (ej: RTD-24-01-06-0021-4)
+### 4. Cronograma: `CRONOGRAMA FRONT-END RTD-24-01-06-0021-4.xlsx`
+- Filas 0-9: Metadata (CURSO, CÓDIGO, HORAS=438, REGIÓN, INICIO=14/5/2026, TÉRMINO=18/8/2026, HORARIO=19:00-23:00, RELATOR=Juan Pablo Duran)
+- Filas 13-21: Resumen M1-M9 con horas sincrónicas/asincrónicas
+- Filas 27+: 66 clases con aprendizajes esperados, fechas, horas
 
-### 4. Students (CSV/XLSX) - Lista de alumnos
-- Headers: RUT, Nombre, Email, Teléfono (o variaciones)
-- **Parser:** `features/ingestion/lib/student-parser.ts`
-
-### 5. Attendance (CSV/XLSX) - Asistencia
-- Formato: Fecha | Estudiante | Estado (Presente/Ausente)
+**9 Módulos:**
+- M1: ORIENTACIÓN (18h) - 14-18 Mayo
+- M2: FUNDAMENTOS FRONT-END (72h) - 18 Mayo - 3 Junio
+- M3: INTERFAZ USUARIO WEB (56h) - 3-15 Junio
+- M4: JAVASCRIPT BÁSICO (60h) - 16-26 Junio
+- M5: JAVASCRIPT AVANZADO (48h) - 29 Junio - 8 Julio
+- M6: VUE BÁSICO (72h) - 8-24 Julio
+- M7: VUE AVANZADO (76h) - 27 Julio - 11 Agosto
+- M8: PORTAFOLIO (18h) - 11-14 Agosto
+- M9: EMPLEABILIDAD (18h) - 14-18 Agosto
 
 ---
 
-## 🔄 Pipeline de Ingestión (REAL)
+##  Pipeline de Ingestión
 
 ```
 Archivo → detectContentType() → Parser específico → 
-  ├─ SENCE (dedication/progress/syllabus) → bulkUpsert directo (SIN Zod/normalize)
+  ├─ SENCE (dedication/progress/syllabus) → bulkUpsert directo (SIN Zod)
   └─ Estándar (students/attendance) → Zod validation → normalize → bulkUpsert
 ```
 
-**CRÍTICO:** Los parsers SENCE ya retornan entidades tipadas. NO pasar por Zod/normalize (causa errores de tipo `hours: string` vs `hours: number`).
+**CRÍTICO:** Los parsers SENCE retornan entidades tipadas. NO pasar por Zod/normalize.
+
+**Después de ingestión:** Se ejecuta `matchAllRecords()` para vincular dedication/progress/attendance/notes con estudiantes por nombre/email.
 
 ---
 
@@ -88,91 +106,97 @@ Archivo → detectContentType() → Parser específico →
 - Texto: slate-100, slate-400, slate-500
 
 ### Encoding
-- **UTF-8** para toda la UI
-- **UTF-16LE** detectado automáticamente para CSV de SENCE
-- **NUNCA** mostrar raw bytes o null bytes en UI
+- UTF-8 para UI
+- UTF-16LE auto-detectado para CSV de SENCE
+- NUNCA mostrar raw bytes o null bytes
+
+### Timezone
+- **CRÍTICO:** Usar `new Date(2026, 4, 14)` (constructor local) en vez de `new Date('2026-05-14')` (UTC)
+- Chile es UTC-3/-4, usar `getFullYear/getMonth/getDate` para fechas locales
+- Funciones helper: `toLocalDateStr()`, `parseLocalDate()`
 
 ---
 
-##  Bugs Conocidos (Prioridad)
+## 📊 Estado Actual del Proyecto
 
-### P0 - Críticos
-1. **Encoding UTF-16LE**: Progress CSV viene con BOM, tildes se ven mal
-2. **Error bloqueante**: Si un archivo falla, no procesa los demás ni permite eliminar el fallido
-3. **Caja duplicada**: Zona "Nómina de alumnos" aparece 2 veces en /ingestion
+### ✅ Completamente Funcional
+- Scaffolding completo (~120 archivos)
+- Dashboard con KPIs y gráficos reales
+- Tabla de estudiantes con filtros, búsqueda, orden alfabético A-Z
+- Vista de detalle con 6 tabs (Resumen, Asistencia, Progreso, Dedicación, Pendientes, Notas)
+- Motor de riesgo (calculateRisk) con datos reales
+- Ingestión completa de 5 tipos de archivos SENCE
+- Matching automático entre archivos
+- CRM completo con timeline, filtros, NoteCard, NoteForm
+- Selector de estado del estudiante (Activo/Desertor/Inactivo/Reemplazo)
+- Editor de estado inline en tabla
+- Multi-cohort con selector de curso
+- Feature flags para IA
+- Notas de módulo cargadas en DB (52 registros)
+- Asistencia con comentarios extraídos
+- **Editor interactivo de asistencia:**
+  - Genera todas las fechas del cronograma (14 Mayo - 18 Agosto, Lun-Vie)
+  - Excluye feriados chilenos
+  - Click en celda cicla estados: - → P → A → T → J → -
+  - Guardado optimista a IndexedDB
+  - Modal de comentarios por celda
+  - Selector de mes y leyenda de colores
+  - Stats como promedios por alumno (no conteo total)
+  - Filtra solo días hasta hoy (no muestra días futuros)
 
-### P1 - Importantes
-4. **Botones asistencia**: Texto muy largo ("Marcar todos presentes hoy"), se ven aglutinados
-5. **Eliminar estudiantes**: No hay forma de borrar estudiantes de prueba
-6. **Syllabus tipo**: Acepta .csv pero debe ser .xlsx
+### ⚠️ Pendiente de Implementar
+1. **Tab "Evaluaciones"** en detalle del estudiante para mostrar notas de módulo
+2. **Analítica avanzada** (gráficos de cohorte, comparativas entre estudiantes)
+3. **Configuración** (umbrales de riesgo editables, gestión de cohortes)
+4. **Exportar reportes** (CSV/PDF de asistencia, progreso, riesgo)
+5. **Eliminar estudiantes** (botón trash con confirmación)
 
-### P2 - Mejoras
-7. **Fuzzy match**: Nombres en dedication no siempre matchean exacto con students
-8. **Preview antes de cargar**: Mostrar datos antes de hacer bulkUpsert
+### ✅ Bugs Resueltos
+- Encoding UTF-16LE en progress
+- Error bloqueante en ingestion (ahora procesa archivos independientes)
+- Caja duplicada de students eliminada
+- Botones de asistencia acortados
+- Módulos ordenados por moduleNumber
+- Actividades pendientes usan progress como fuente de verdad
+- Keys duplicadas en ProgresoTab corregidas
+- CohortId mismatch entre syllabus y students
+- Timezone UTC → local (fechas correctas en Chile)
 
 ---
 
-##  Estructura de Carpetas (FSD)
+## 🏗️ Estructura de Carpetas (FSD)
 
 ```
 src/
 ├── app/ (providers, routers, styles)
 ├── pages/ (dashboard, students, ingestion, analytics, crm, attendance, settings)
 ├── widgets/ (layout: sidebar, header, main-layout)
-── features/
-│   ├── students/ (CRUD, tabla, detalle)
-│   ├── ingestion/ (parsers, upload, store)
+├── features/
+│   ├── students/ (CRUD, tabla, detalle, status-selector, matcher)
+│   ├── ingestion/ (parsers SENCE, upload, store, validate-ai-config)
 │   ├── risk-engine/ (calculateRisk, thresholds)
 │   ├── analytics/ (gráficos, KPIs)
-│   ├── crm/ (notas, seguimiento)
-│   ├── attendance/ (grid visual con círculos)
+│   ├── crm/ (notas, seguimiento, note-card, note-form, note-timeline)
+│   ├── attendance/ (grid visual, generate-dates, attendance-api, edit-modal)
 │   └── ai-assistant/ (OPCIONAL, Groq)
-├── entities/ (student, attendance, progress, dedication, syllabus, note, cohort, upload-log)
-└── shared/ (ui, lib, hooks, config, mocks)
+├── entities/ (student, attendance, progress, dedication, syllabus, note, cohort, upload-log, module-grade)
+└── shared/ (ui, lib, hooks, config, mocks, date)
 ```
 
 ---
 
 ## 🔑 Variables de Entorno
 
-```bash
-# Feature Flags
-VITE_ENABLE_AI=false
+Ver `.env.example` para lista completa.
 
-# IA (OPCIONAL - Solo Groq, gratis sin tarjeta)
-VITE_GROQ_API_KEY=
-
-# Supabase (Fase 2)
-VITE_SUPABASE_URL=
-VITE_SUPABASE_ANON_KEY=
-```
+**Importante:**
+- NUNCA commitear `.env.local` con valores reales
+- Las API keys se obtienen de los proveedores oficiales
+- Groq: https://console.groq.com (gratis, sin tarjeta)
 
 ---
 
-## 📊 Estado Actual del Proyecto
-
-### ✅ Funcional
-- Scaffolding completo (~80 archivos)
-- Dashboard con KPIs y gráficos
-- Tabla de estudiantes con filtros
-- Vista de detalle del estudiante
-- Motor de riesgo (calculateRisk)
-- Carga de students (nómina) funciona
-- Sistema de notas (CRM)
-- Módulo de asistencia visual (círculos)
-- Multi-cohort (selector de curso)
-
-### 🐛 Pendiente
-- Fix encoding UTF-16LE en progress
-- Fix error bloqueante en ingestion
-- Eliminar caja duplicada de students
-- Acortar botones de asistencia
-- Agregar botón eliminar estudiante
-- Fix parsers dedication/syllabus
-
----
-
-## 🚀 Comandos
+##  Comandos
 
 ```bash
 npm install
@@ -186,11 +210,24 @@ npm run build        # Production build
 
 ## 📝 Historial
 
+### v2.1.0 (2026-06-23)
+- Editor interactivo de asistencia (click para ciclar estados)
+- Fix timezone local (fechas correctas en Chile UTC-3/-4)
+- Stats como promedios por alumno (no conteo total)
+- Filtra días hasta hoy (no muestra futuros)
+- Modal de comentarios por celda
+- Selector de mes en asistencia
+- Selector de estado del estudiante (4 estados)
+- Editor de estado inline en tabla
+- CRM completo (timeline, filtros, formularios)
+- Notas de módulo cargadas desde hoja "Notas"
+- Parser de asistencia multi-hoja con comentarios threaded
+- Parser de cronograma con 9 módulos reales
+- Matching automático post-ingestión
+
 ### v2.0.0 (2026-06-22)
 - Fix estructura REAL de archivos SENCE
-- Dedication: slice(3) no slice(8)
-- Progress: UTF-16LE, col 0=nombre, col 1=email
-- Syllabus: rows 28+, 9 módulos, 66 clases
+- Dedication: slice(3), Progress: UTF-16LE, Syllabus: rows 28+
 - Pipeline diferenciado: SENCE skip Zod/normalize
 - detectContentType() por nombre de archivo
 
@@ -201,4 +238,3 @@ npm run build        # Production build
 
 ### v1.0.0 (2026-06-22)
 - Scaffolding inicial
-
