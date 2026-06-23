@@ -50,6 +50,7 @@ import { NoteTimeline } from '@/features/crm/ui/note-timeline';
 import { NoteForm } from '@/features/crm/ui/note-form';
 import { createNote, updateNote, deleteNote, toggleComplete } from '@/features/crm/api/crm-api';
 import { StatusSelector } from '@/features/students/ui/status-selector';
+import { EvaluacionesTab } from '@/features/students/ui/evaluaciones-tab';
 import type { Student } from '@/entities/student';
 import type { PendingActivity } from '@/features/students/lib/pending-activities';
 import type { AttendanceRecord } from '@/entities/attendance';
@@ -973,7 +974,7 @@ function PendientesTab({ studentId }: { studentId: string }) {
 
 // ── Main page component ────────────────────────────────────────────────
 
-type TabValue = 'resumen' | 'asistencia' | 'progreso' | 'dedicacion' | 'notas' | 'pendientes';
+type TabValue = 'resumen' | 'asistencia' | 'progreso' | 'dedicacion' | 'notas' | 'pendientes' | 'evaluaciones';
 
 export function StudentDetailPage() {
   const { id } = useParams<{ id: string }>();
@@ -1145,6 +1146,7 @@ export function StudentDetailPage() {
     { value: 'progreso', label: 'Progreso' },
     { value: 'dedicacion', label: 'Dedicación' },
     { value: 'pendientes', label: 'Pendientes' },
+    { value: 'evaluaciones', label: 'Evaluaciones' },
     { value: 'notas', label: 'Notas' },
   ];
 
@@ -1283,6 +1285,9 @@ export function StudentDetailPage() {
           </Tabs.Content>
           <Tabs.Content value="pendientes" className="animate-fade-in">
             <PendientesTab studentId={student.id} />
+          </Tabs.Content>
+          <Tabs.Content value="evaluaciones" className="animate-fade-in">
+            <EvaluacionesTab studentId={student.id} />
           </Tabs.Content>
           <Tabs.Content value="notas" className="animate-fade-in">
             <NotasTab studentId={student.id} />

@@ -10,6 +10,8 @@ export {
   updateStudentStatus,
   getStudentMetrics,
   getAllStudentMetrics,
+  getStudentModuleGrades,
+  getStudentAverage,
 } from './api/students-api';
 export type { StudentMetrics } from './api/students-api';
 

@@ -3,6 +3,7 @@ import { calculateRisk } from '@/features/risk-engine';
 import type { Student, StudentStatus } from '@/entities/student';
 import type { Cohort } from '@/entities/cohort';
 import type { RiskOutput } from '@/features/risk-engine';
+import type { ModuleGrade } from '@/entities/module-grade';
 
 export interface StudentMetrics {
   studentId: string;
@@ -219,4 +220,32 @@ export async function bulkImportStudents(
   }
 
   return { imported, skipped };
+}
+
+export async function getStudentModuleGrades(studentId: string): Promise<ModuleGrade[]> {
+  return db.moduleGrades
+    .where('studentId')
+    .equals(studentId)
+    .sortBy('moduleNumber');
+}
+
+export async function getStudentAverage(
+  studentId: string
+): Promise<{ average: number; completedModules: number; totalModules: number }> {
+  const grades = await getStudentModuleGrades(studentId);
+  const completed = grades.filter(g => g.grade !== null && !g.isPending);
+  const total = grades.length;
+
+  if (completed.length === 0) {
+    return { average: 0, completedModules: 0, totalModules: total };
+  }
+
+  const sum = completed.reduce((acc, g) => acc + (g.grade || 0), 0);
+  const average = sum / completed.length;
+
+  return {
+    average: Math.round(average * 100) / 100,
+    completedModules: completed.length,
+    totalModules: total,
+  };
 }
