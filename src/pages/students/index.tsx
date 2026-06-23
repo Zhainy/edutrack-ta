@@ -69,18 +69,6 @@ const RISK_OPTIONS: { value: RiskFilter; label: string }[] = [
   { value: 'low', label: 'Bajo' },
 ];
 
-function riskBadgeVariant(level: RiskOutput['riskLevel']): 'risk-high' | 'risk-medium' | 'risk-low' {
-  if (level === 'high') return 'risk-high';
-  if (level === 'medium') return 'risk-medium';
-  return 'risk-low';
-}
-
-function riskLabel(level: RiskOutput['riskLevel']): string {
-  if (level === 'high') return 'Alto';
-  if (level === 'medium') return 'Medio';
-  return 'Bajo';
-}
-
 interface FilterBarProps {
   searchValue: string;
   onSearchChange: (value: string) => void;
@@ -509,27 +497,22 @@ export function StudentsPage() {
           const risk = row.original.risk;
           if (!risk) return <span className="text-xs text-slate-600">—</span>;
           return (
-            <div className="flex items-center gap-2">
-              <div className="flex items-center gap-1.5 flex-1 min-w-[80px]">
-                <div className="flex-1 h-1.5 rounded-full bg-slate-800 overflow-hidden">
-                  <div
-                    className={`h-full rounded-full transition-all ${
-                      risk.riskLevel === 'high'
-                        ? 'bg-rose-500'
-                        : risk.riskLevel === 'medium'
-                          ? 'bg-amber-400'
-                          : 'bg-emerald-500'
-                    }`}
-                    style={{ width: `${risk.riskScore}%` }}
-                  />
-                </div>
-                <span className="text-xs font-mono text-slate-400 w-8 text-right">
-                  {risk.riskScore}
-                </span>
+            <div className="flex items-center gap-1.5">
+              <div className="flex-1 h-2 rounded-full bg-slate-800 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    risk.riskLevel === 'high'
+                      ? 'bg-rose-500'
+                      : risk.riskLevel === 'medium'
+                        ? 'bg-amber-400'
+                        : 'bg-emerald-500'
+                  }`}
+                  style={{ width: `${risk.riskScore}%` }}
+                />
               </div>
-              <Badge variant={riskBadgeVariant(risk.riskLevel)}>
-                {riskLabel(risk.riskLevel)}
-              </Badge>
+              <span className="text-xs font-mono text-slate-500 w-8 text-right flex-shrink-0">
+                {risk.riskScore}
+              </span>
             </div>
           );
         },
