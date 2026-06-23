@@ -1182,7 +1182,7 @@ export function StudentDetailPage() {
 
           {/* Info */}
           <div className="flex-1 min-w-0">
-            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+            <div className="flex flex-col sm:flex-row sm:items-end gap-2 sm:gap-3">
               <h1 className="text-xl font-semibold text-slate-100 truncate">
                 {student.fullName}
               </h1>

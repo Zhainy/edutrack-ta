@@ -43,7 +43,7 @@ export function StatusSelector({ studentId, currentStatus, onChange, size = 'md'
       onChange={(e) => handleChange(e.target.value as StudentStatus)}
       disabled={isChanging}
       className={`
-        h-6 ${textClass} px-2 py-0 rounded-lg font-medium align-baseline
+        h-6 ${textClass} px-2 py-0 rounded-lg font-medium
         text-white border-0 cursor-pointer
         disabled:opacity-50 disabled:cursor-not-allowed
         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-950
