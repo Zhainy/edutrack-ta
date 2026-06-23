@@ -35,7 +35,7 @@ export function StatusSelector({ studentId, currentStatus, onChange, size = 'md'
     }
   };
 
-  const heightClass = size === 'sm' ? 'h-7 text-xs' : 'h-9 text-sm';
+  const textClass = size === 'sm' ? 'text-xs' : 'text-sm';
 
   return (
     <select
@@ -43,7 +43,7 @@ export function StatusSelector({ studentId, currentStatus, onChange, size = 'md'
       onChange={(e) => handleChange(e.target.value as StudentStatus)}
       disabled={isChanging}
       className={`
-        ${heightClass} px-3 py-1.5 rounded-md font-medium
+        h-6 ${textClass} px-2 py-0 rounded-lg font-medium align-baseline
         text-white border-0 cursor-pointer
         disabled:opacity-50 disabled:cursor-not-allowed
         focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-slate-950
