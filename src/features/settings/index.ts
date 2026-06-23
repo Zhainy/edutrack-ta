@@ -1,5 +1,7 @@
 export { useSettingsStore } from './model/settings-store';
 export type { TaProfile, RiskThresholds, Preferences } from './model/settings-store';
+export { useProfileStore } from './model/profile-store';
+export type { ProfileState } from './model/profile-store';
 export { ProfileTab } from './ui/profile-tab';
 export { CohortsTab } from './ui/cohorts-tab';
 export { RiskTab } from './ui/risk-tab';
