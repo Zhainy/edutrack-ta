@@ -25,12 +25,10 @@ export function ProfileTab() {
   const name = useProfileStore((s) => s.name);
   const email = useProfileStore((s) => s.email);
   const role = useProfileStore((s) => s.role);
-  const otec = useProfileStore((s) => s.otec);
   const institution = useProfileStore((s) => s.institution);
   const setName = useProfileStore((s) => s.setName);
   const setEmail = useProfileStore((s) => s.setEmail);
   const setRole = useProfileStore((s) => s.setRole);
-  const setOtec = useProfileStore((s) => s.setOtec);
   const setInstitution = useProfileStore((s) => s.setInstitution);
 
   function handleSave() {
@@ -93,18 +91,10 @@ export function ProfileTab() {
           </div>
 
           <Input
-            label="OTEC"
-            value={otec}
-            onChange={(e) => setOtec(e.target.value)}
-            placeholder="Nombre de la OTEC"
-            helperText="Organismo Técnico de Capacitación al que perteneces"
-          />
-
-          <Input
             label="Institución"
             value={institution}
             onChange={(e) => setInstitution(e.target.value)}
-            placeholder="Nombre de la institución"
+            placeholder="Organismo Técnico de Capacitación al que perteneces"
           />
         </div>
       </Card.Content>
