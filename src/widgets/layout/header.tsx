@@ -3,6 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { Bell, User, Menu, ChevronDown } from 'lucide-react';
 import { cn } from '@/shared/lib/utils';
 import { useStudentsStore } from '@/features/students';
+import { ExportButton } from '@/features/export';
 
 const ROUTE_LABELS: Record<string, string> = {
   '/dashboard': 'Dashboard',
@@ -96,6 +97,9 @@ export function Header({ onMenuToggle }: HeaderProps) {
             />
           </div>
         ) : null}
+
+        {/* Export */}
+        <ExportButton cohortId={activeCohortId} cohortName={activeCohort?.name} />
 
         {/* Notifications */}
         <button
